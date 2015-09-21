@@ -1,0 +1,11 @@
+include COPYING
+include README.md
+include RELEASE-VERSION
+include version.py
+include pavement.py
+include paver-minilib.zip
+include setup.py
+include SConstruct
+recursive-include rpc_project_template *
+recursive-exclude rpc_project_template *.pyc
+recursive-exclude rpc_project_template *.o
