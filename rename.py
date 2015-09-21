@@ -53,15 +53,11 @@ def parse_args(args=None):
     if args is None:
         args = sys.argv
 
-    parser = ArgumentParser(description='Replace occurrences of <old name> '
-                            'with <new name> (path names and in files).')
-    parser.add_argument('old_name', help='Original project name (e.g., '
-                        '`my-project`)')
+    parser = ArgumentParser(description='Rename template project with'
+                            'hyphen-separated <new name> (path names and in '
+                            'files).')
     parser.add_argument('new_name', help='New project name (e.g., '
                         ' `my-new-project`)')
-    parser.add_argument('root', help='Root of directory structure to process '
-                        '(default is current directory).', default='.',
-                        nargs='?')
 
     args = parser.parse_args()
     return args
@@ -69,4 +65,4 @@ def parse_args(args=None):
 
 if __name__ == '__main__':
     args = parse_args()
-    main(args.root, args.old_name, args.new_name)
+    main('.', 'rpc-project-template', args.new_name)
