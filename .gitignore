@@ -24,3 +24,5 @@ arduino_rpc/protobuf_commands.py
 */config.py
 *~
 *.swp
+.project
+.pydevproject
