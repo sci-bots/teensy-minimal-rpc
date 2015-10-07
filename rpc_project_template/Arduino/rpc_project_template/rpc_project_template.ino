@@ -5,7 +5,7 @@
 #include "Memory.h"
 #include "nanopb.h"
 #include "NadaMQ.h"
-#include "Array.h"
+#include "CArrayDefs.h"
 #include "RPCBuffer.h"
 #include "RpcProjectTemplate/CommandProcessor.h"
 #include "NodeCommandProcessor.h"

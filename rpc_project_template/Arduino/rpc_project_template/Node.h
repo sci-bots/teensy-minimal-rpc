@@ -11,7 +11,7 @@
 #include <BaseNodeRpc/BaseNodeState.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
-#include <Array.h>
+#include <CArrayDefs.h>
 #include <BaseNodeRpc/I2cHandler.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <pb_validate.h>
