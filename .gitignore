@@ -13,6 +13,7 @@ build/*
 */Arduino/*/*state_validate.h
 */Arduino/*/*RPCBuffer.h
 */Arduino/library
+*/Arduino/*/NodeCommandProcessor.h
 *.o
 */protobuf/nano
 */protobuf/py
