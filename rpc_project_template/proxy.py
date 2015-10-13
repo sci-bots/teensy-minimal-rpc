@@ -1,5 +1,6 @@
 try:
-    from .node import Proxy as _Proxy, I2cProxy as _I2cProxy
+    from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
+                       SerialProxy as _SerialProxy)
 
     class ProxyMixin(object):
         '''
@@ -36,14 +37,14 @@ try:
             (e.g., to verify system behavior before committing the changes),
             you can pass the special keyword argument 'save=False'. In this case,
             you will need to call the method save_config() to make your changes
-            persistent. 
+            persistent.
             '''
 
             from .config import Config
-            
+
             save = True
             if 'save' in kwargs.keys() and not kwargs.pop('save'):
-                save = False 
+                save = False
 
             config = Config(**kwargs)
             return_code = super(ProxyMixin, self).update_config(config)
@@ -66,6 +67,10 @@ try:
     class I2cProxy(ProxyMixin, _I2cProxy):
         pass
 
+    class SerialProxy(ProxyMixin, _SerialProxy):
+        pass
+
 except (ImportError, TypeError):
     Proxy = None
     I2cProxy = None
+    SerialProxy = None

@@ -5,7 +5,7 @@ try:
     from .config import Config, State
 except (ImportError, TypeError):
     pass
-from proxy import Proxy, I2cProxy
+from proxy import Proxy, I2cProxy, SerialProxy
 
 
 def package_path():
