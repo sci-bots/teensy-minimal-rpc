@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <NadaMQ.h>
+#include "RPCBuffer.h"  // Define packet sizes
+#include "RpcProjectTemplate/Properties.h"  // Define package name, URL, etc.
 #include <BaseNodeRpc/BaseNodeRpc.h>
 #include <BaseNodeRpc/BaseNodeEeprom.h>
 #include <BaseNodeRpc/BaseNodeI2c.h>

@@ -6,10 +6,9 @@
 #include "nanopb.h"
 #include "NadaMQ.h"
 #include "CArrayDefs.h"
-#include "RPCBuffer.h"
+#include "Node.h"
 #include "RpcProjectTemplate/CommandProcessor.h"
 #include "NodeCommandProcessor.h"
-#include "Node.h"
 
 
 rpc_project_template::Node node_obj;
