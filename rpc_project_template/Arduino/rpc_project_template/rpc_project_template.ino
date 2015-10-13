@@ -3,12 +3,14 @@
 #include "SPI.h"
 #include "Wire.h"
 #include "Memory.h"
+#include "ArduinoRpc.h"
 #include "nanopb.h"
 #include "NadaMQ.h"
 #include "CArrayDefs.h"
-#include "Node.h"
-#include "RpcProjectTemplate/CommandProcessor.h"
+#include "RPCBuffer.h"
 #include "NodeCommandProcessor.h"
+#include "BaseNodeRpc.h"
+#include "Node.h"
 
 
 rpc_project_template::Node node_obj;
