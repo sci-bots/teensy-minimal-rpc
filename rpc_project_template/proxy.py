@@ -1,3 +1,4 @@
+from path_helpers import path
 try:
     from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
                        SerialProxy as _SerialProxy)
@@ -9,6 +10,8 @@ try:
 
         For example, expose config and state getters/setters as attributes.
         '''
+        host_package_name = str(path(__file__).parent.name.replace('_', '-'))
+
         @property
         def config(self):
             from .config import Config
