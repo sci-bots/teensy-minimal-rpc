@@ -64,3 +64,28 @@ options(
                                  'arduino_helpers>=0.3post10'],
                include_package_data=True,
                packages=[str(PROJECT_PREFIX)]))
+
+
+@task
+@cmdopts(LIB_CMDOPTS, share_with=LIB_GENERATE_TASKS)
+def generate_library_main_header(options):
+    library_dir = verify_library_directory(options)
+    library_header = library_dir.joinpath('src', 'RpcProjectTemplate.h')
+    print library_header
+    if not library_header.isdir():
+        library_header.parent.makedirs_p()
+    with library_header.open('wb') as output:
+        output.write('''
+#ifndef ___RPC_PROJECT_TEMPLATE__H___
+#define ___RPC_PROJECT_TEMPLATE__H___
+
+#endif  // #ifndef ___RPC_PROJECT_TEMPLATE__H___
+    '''.strip())
+
+
+@task
+@needs('build_arduino_library', 'generate_setup', 'minilib', 'build_firmware',
+       'generate_python_code', 'setuptools.command.sdist')
+def sdist():
+    """Overrides sdist to make sure that our setup.py is generated."""
+    pass

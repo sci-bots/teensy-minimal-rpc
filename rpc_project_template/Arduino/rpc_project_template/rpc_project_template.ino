@@ -10,6 +10,7 @@
 #include "RPCBuffer.h"
 #include "NodeCommandProcessor.h"
 #include "BaseNodeRpc.h"
+#include "RpcProjectTemplate.h"
 #include "Node.h"
 
 
