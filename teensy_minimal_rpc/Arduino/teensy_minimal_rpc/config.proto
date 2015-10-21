@@ -1,4 +1,4 @@
-package rpc_project_template;
+package teensy_minimal_rpc;
 
 message Config {
   /* # Configuration structure #

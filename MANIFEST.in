@@ -6,6 +6,6 @@ include pavement.py
 include paver-minilib.zip
 include setup.py
 include SConstruct
-recursive-include rpc_project_template *
-recursive-exclude rpc_project_template *.pyc
-recursive-exclude rpc_project_template *.o
+recursive-include teensy_minimal_rpc *
+recursive-exclude teensy_minimal_rpc *.pyc
+recursive-exclude teensy_minimal_rpc *.o

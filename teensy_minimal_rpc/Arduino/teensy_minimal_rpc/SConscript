@@ -22,6 +22,7 @@ if 'CFLAGS' in ARGUMENTS:
     env_dict['CFLAGS'] = ARGUMENTS['CFLAGS']
     print '[CFLAGS] "%s"' % env_dict['CFLAGS']
 build_context = ArduinoBuildContext(ARGUMENTS, build_root=sketch_build_root)
+from IPython import embed; embed()
 arduino_hex = build_context.build(extra_sources=get_sources(),
                                   register_upload=True,
                                   env_dict=env_dict)
