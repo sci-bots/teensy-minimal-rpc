@@ -12,12 +12,23 @@
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <IntervalTimer.h>
+#include <RingBufferDMA.h>
+
+const int ADC_BUFFER_SIZE = 64;
 
 extern IntervalTimer timer0; // timer
 void timer0_callback(void);
 
 
 namespace teensy_minimal_rpc {
+
+// Define the array that holds the conversions here.
+// buffer_size must be a power of two.
+// The buffer is stored with the correct alignment in the DMAMEM section
+// the +0 in the aligned attribute is necessary b/c of a bug in gcc.
+DMAMEM static volatile int16_t __attribute__((aligned(ADC_BUFFER_SIZE+0))) adc_buffer[ADC_BUFFER_SIZE];
+
+  
 const size_t FRAME_SIZE = (3 * sizeof(uint8_t)  // Frame boundary
                            - sizeof(uint16_t)  // UUID
                            - sizeof(uint16_t)  // Payload length
@@ -33,10 +44,24 @@ public:
 
   static const uint16_t BUFFER_SIZE = 128;  // >= longest property string
 
+  // use dma with ADC0
+  RingBufferDMA *dmaBuffer_;
+
   uint8_t buffer_[BUFFER_SIZE];
   ADC *adc_;
+  uint32_t adc_period_us_;
+  uint32_t adc_timestamp_us_;
+  bool adc_tick_tock_;
+  uint32_t adc_millis_;
+  uint32_t adc_SYST_CVR_;
+  uint32_t adc_millis_prev_;
+  uint32_t adc_SYST_CVR_prev_;
+  uint32_t adc_count_;
 
-  Node() : BaseNode() {}
+  Node() : BaseNode(), dmaBuffer_(new RingBufferDMA(teensy_minimal_rpc::adc_buffer,
+                                                    ADC_BUFFER_SIZE, ADC_0)),
+           adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
+           adc_count_(0) {}
 
   UInt8Array get_buffer() { return UInt8Array(sizeof(buffer_), buffer_); }
   /* This is a required method to provide a temporary buffer to the
@@ -61,6 +86,38 @@ public:
    * [2]: https://github.com/wheeler-microfluidics/base_node_rpc
    */
 
+  void dma_start() { if (dmaBuffer_ != NULL) { dmaBuffer_->start(); } }
+  int16_t dma_read() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->read(); }
+  uint8_t dma_full() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isFull(); }
+  uint8_t dma_empty() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isEmpty(); }
+  uint8_t dma_available() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->available(); }
+
+  UInt16Array adc_buffer() {
+    UInt8Array byte_buffer = get_buffer();
+    UInt16Array result;
+    result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
+    result.length = dmaBuffer_->b_size;
+
+    uint8_t i = 0;
+    for (i = 0; i < dmaBuffer_->b_size; i++) {
+      result.data[i] = dmaBuffer_->p_elems[i];
+    }
+    return result;
+  }
+
+  UInt16Array adc_read() {
+    UInt8Array byte_buffer = get_buffer();
+    UInt16Array result;
+    result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
+    result.length = dmaBuffer_->available();
+
+    uint8_t i = 0;
+    for (i = 0; i < result.length; i++) {
+      result.data[i] = dmaBuffer_->read();
+    }
+    return result;
+  }
+  
   /////////////// METHODS TO SET/GET SETTINGS OF THE ADC ////////////////////
 
   //! Set the voltage reference you prefer, default is 3.3 V (VCC)
@@ -80,13 +137,49 @@ public:
   void stop_timer() {
     timer0.end();
   }
+  
+  void on_tick() {}
 
-  void on_tick() {
-    digitalWriteFast(13, !digitalReadFast(13));
+  uint32_t V__SYST_CVR() { return SYST_CVR; }
+  uint32_t V__SCB_ICSR() { return SCB_ICSR; }
+  uint32_t D__F_CPU() { return F_CPU; }
+
+  void on_adc_done() {
+    adc_SYST_CVR_prev_ = adc_SYST_CVR_;
+    adc_millis_ = millis();
+    adc_SYST_CVR_ = SYST_CVR;
+
+//    uint32_t now_ = micros();
+//    adc_period_us_ = now_ - adc_timestamp_us_;
+//    adc_timestamp_us_ = now_;
+//    digitalWriteFast(13, !digitalReadFast(13));
+//    adc_tick_tock_ = !adc_tick_tock_;
+//    digitalWriteFast(13, adc_tick_tock_);
   }
 
+  float adc_timestamp_us() const {
+    return compute_timestamp_us(adc_SYST_CVR_, adc_millis_);
+  }
+  float compute_timestamp_us(uint32_t _SYST_CVR, uint32_t _millis) const {
+    uint32_t current = ((F_CPU / 1000) - 1) - _SYST_CVR;
+#if defined(KINETISL) && F_CPU == 48000000
+    return _millis * 1000 + ((current * (uint32_t)87381) >> 22);
+#elif defined(KINETISL) && F_CPU == 24000000
+    return _millis * 1000 + ((current * (uint32_t)174763) >> 22);
+#endif
+    return 1000 * (_millis + current * (1000. / F_CPU));
+  }
+
+  float adc_period_us() const {
+    uint32_t _SYST_CVR = ((adc_SYST_CVR_ < adc_SYST_CVR_prev_)
+                          ? adc_SYST_CVR_ + 1000
+                          : adc_SYST_CVR_);
+    return (compute_timestamp_us(_SYST_CVR, 0) -
+            compute_timestamp_us(adc_SYST_CVR_prev_, 0));
+  }
+  
   //! Change the resolution of the measurement.
-  /*!
+  /*
   *  \param bits is the number of bits of resolution.
   *  For single-ended measurements: 8, 10, 12 or 16 bits.
   *  For differential measurements: 9, 11, 13 or 16 bits.
