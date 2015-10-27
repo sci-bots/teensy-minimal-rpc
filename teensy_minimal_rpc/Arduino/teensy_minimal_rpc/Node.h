@@ -600,6 +600,10 @@ public:
     adc_->stopSynchronizedContinuous();
   }
 #endif
+
+  uint16_t analog_input_to_digital_pin(uint16_t pin) { return analogInputToDigitalPin(pin); }
+  uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
+  uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
 };
 
 }  // namespace teensy_minimal_rpc
