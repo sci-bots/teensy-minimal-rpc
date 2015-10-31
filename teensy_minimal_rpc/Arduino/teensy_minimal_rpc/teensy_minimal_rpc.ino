@@ -24,7 +24,7 @@ IntervalTimer timer0; // timer
 // first: see which pin finished and then save the measurement into the correct buffer
 void adc0_isr() {
   node_obj.on_adc_done();
-//  ADC0_RA; // clear interrupt
+  //ADC0_RA; // clear interrupt
 }
 
 void serialEvent() { node_obj.serial_handler_.receiver()(Serial.available()); }

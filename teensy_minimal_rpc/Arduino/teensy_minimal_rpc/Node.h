@@ -13,8 +13,11 @@
 #include <ADC.h>
 #include <IntervalTimer.h>
 #include <RingBufferDMA.h>
+#include <DMAChannel.h>
+#include <TeensyMinimalRpc/ADC_pb.h>
+#include <pb_cpp_api.h>
 
-const int ADC_BUFFER_SIZE = 64;
+const uint32_t ADC_BUFFER_SIZE = 4096;
 
 extern IntervalTimer timer0; // timer
 void timer0_callback(void);
@@ -22,13 +25,44 @@ void timer0_callback(void);
 
 namespace teensy_minimal_rpc {
 
+struct AdcRegister_t {
+  volatile uint32_t SC1A;
+  volatile uint32_t SC1B;
+  volatile uint32_t CFG1;
+  volatile uint32_t CFG2;
+  volatile uint32_t RA;
+  volatile uint32_t RB;
+  volatile uint32_t CV1;
+  volatile uint32_t CV2;
+  volatile uint32_t SC2;
+  volatile uint32_t SC3;
+  volatile uint32_t OFS;
+  volatile uint32_t PG;
+  volatile uint32_t MG;
+  volatile uint32_t CLPD;
+  volatile uint32_t CLPS;
+  volatile uint32_t CLP4;
+  volatile uint32_t CLP3;
+  volatile uint32_t CLP2;
+  volatile uint32_t CLP1;
+  volatile uint32_t CLP0;
+  volatile uint32_t PGA;
+  volatile uint32_t CLMD;
+  volatile uint32_t CLMS;
+  volatile uint32_t CLM4;
+  volatile uint32_t CLM3;
+  volatile uint32_t CLM2;
+  volatile uint32_t CLM1;
+  volatile uint32_t CLM0;
+};
+
 // Define the array that holds the conversions here.
 // buffer_size must be a power of two.
 // The buffer is stored with the correct alignment in the DMAMEM section
 // the +0 in the aligned attribute is necessary b/c of a bug in gcc.
 DMAMEM static volatile int16_t __attribute__((aligned(ADC_BUFFER_SIZE+0))) adc_buffer[ADC_BUFFER_SIZE];
 
-  
+
 const size_t FRAME_SIZE = (3 * sizeof(uint8_t)  // Frame boundary
                            - sizeof(uint16_t)  // UUID
                            - sizeof(uint16_t)  // Payload length
@@ -42,7 +76,7 @@ class Node :
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
-  static const uint16_t BUFFER_SIZE = 128;  // >= longest property string
+  static const uint32_t BUFFER_SIZE = 8192;  // >= longest property string
 
   // use dma with ADC0
   RingBufferDMA *dmaBuffer_;
@@ -57,11 +91,13 @@ public:
   uint32_t adc_millis_prev_;
   uint32_t adc_SYST_CVR_prev_;
   uint32_t adc_count_;
+  bool adc_read_active_;
 
-  Node() : BaseNode(), dmaBuffer_(new RingBufferDMA(teensy_minimal_rpc::adc_buffer,
-                                                    ADC_BUFFER_SIZE, ADC_0)),
+  Node() : BaseNode(), dmaBuffer_(NULL),
            adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
-           adc_count_(0) {}
+           adc_count_(0), adc_read_active_(false) {
+    pinMode(LED_BUILTIN, OUTPUT);
+   }
 
   UInt8Array get_buffer() { return UInt8Array(sizeof(buffer_), buffer_); }
   /* This is a required method to provide a temporary buffer to the
@@ -86,11 +122,36 @@ public:
    * [2]: https://github.com/wheeler-microfluidics/base_node_rpc
    */
 
-  void dma_start() { if (dmaBuffer_ != NULL) { dmaBuffer_->start(); } }
+  UInt8Array dma_tcd() {
+    /* Return serialized "Transfer control descriptor" of DMA channel. */
+    UInt8Array result = get_buffer();
+    if (dmaBuffer_ == NULL) {
+      result.length = 0;
+      return result;
+    }
+    typedef typename DMABaseClass::TCD_t tcd_t;
+    tcd_t &tcd = *reinterpret_cast<tcd_t *>(result.data);
+    result.length = sizeof(tcd_t);
+    tcd = *(dmaBuffer_->dmaChannel->TCD);
+    return result;
+  }
+  bool dma_start(uint32_t buffer_size) {
+    const bool power_of_two = (buffer_size &&
+                               !(buffer_size & (buffer_size - 1)));
+    if ((buffer_size > ADC_BUFFER_SIZE) || !power_of_two) { return false; }
+    dma_stop();
+    dmaBuffer_ = new RingBufferDMA(teensy_minimal_rpc::adc_buffer,
+                                   buffer_size, ADC_0);
+    dmaBuffer_->start();
+    return true;
+  }
+  void dma_stop() {
+    if (dmaBuffer_ != NULL) { delete dmaBuffer_; }
+  }
   int16_t dma_read() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->read(); }
-  uint8_t dma_full() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isFull(); }
-  uint8_t dma_empty() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isEmpty(); }
-  uint8_t dma_available() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->available(); }
+  bool dma_full() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isFull(); }
+  bool dma_empty() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isEmpty(); }
+  uint32_t dma_available() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->available(); }
 
   UInt16Array adc_buffer() {
     UInt8Array byte_buffer = get_buffer();
@@ -98,7 +159,7 @@ public:
     result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
     result.length = dmaBuffer_->b_size;
 
-    uint8_t i = 0;
+    uint16_t i = 0;
     for (i = 0; i < dmaBuffer_->b_size; i++) {
       result.data[i] = dmaBuffer_->p_elems[i];
     }
@@ -106,18 +167,26 @@ public:
   }
 
   UInt16Array adc_read() {
+    adc_read_active_ = true;
     UInt8Array byte_buffer = get_buffer();
     UInt16Array result;
     result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
-    result.length = dmaBuffer_->available();
+    //result.length = dmaBuffer_->available();
+    result.length = dmaBuffer_->available() + (sizeof(uint32_t) /
+                                               sizeof(uint16_t));
+    uint32_t &adc_count = *(reinterpret_cast<uint32_t *>(result.data));
+    adc_count = adc_count_;
+    adc_count_ = 0;
 
-    uint8_t i = 0;
+    uint16_t i = 0;
     for (i = 0; i < result.length; i++) {
-      result.data[i] = dmaBuffer_->read();
+      //result.data[i] = dmaBuffer_->read();
+      result.data[i + 2] = dmaBuffer_->read();
     }
+    adc_read_active_ = false;
     return result;
   }
-  
+
   /////////////// METHODS TO SET/GET SETTINGS OF THE ADC ////////////////////
 
   //! Set the voltage reference you prefer, default is 3.3 V (VCC)
@@ -137,24 +206,32 @@ public:
   void stop_timer() {
     timer0.end();
   }
-  
-  void on_tick() {}
+
+  void on_tick() {
+    if (adc_read_active_) return;
+    uint8_t channel;
+    switch(adc_count_ & 0x01) {
+      case(0): channel = A0; break;
+      case(1): channel = A1; break;
+      //case(2): channel = A2;
+      //case(3): channel = A3;
+      default: channel = A0;
+    }
+    adc_->startSingleRead(channel, ADC_0);
+  }
 
   uint32_t V__SYST_CVR() { return SYST_CVR; }
   uint32_t V__SCB_ICSR() { return SCB_ICSR; }
   uint32_t D__F_CPU() { return F_CPU; }
 
   void on_adc_done() {
-    adc_SYST_CVR_prev_ = adc_SYST_CVR_;
-    adc_millis_ = millis();
-    adc_SYST_CVR_ = SYST_CVR;
-
-//    uint32_t now_ = micros();
-//    adc_period_us_ = now_ - adc_timestamp_us_;
-//    adc_timestamp_us_ = now_;
-//    digitalWriteFast(13, !digitalReadFast(13));
-//    adc_tick_tock_ = !adc_tick_tock_;
-//    digitalWriteFast(13, adc_tick_tock_);
+    if (adc_read_active_) return;
+    adc_count_++;
+    //adc_tick_tock_ = !adc_tick_tock_;
+    //digitalWriteFast(LED_BUILTIN, adc_tick_tock_);
+    //adc_SYST_CVR_prev_ = adc_SYST_CVR_;
+    //adc_millis_ = millis();
+    //adc_SYST_CVR_ = SYST_CVR;
   }
 
   float adc_timestamp_us() const {
@@ -177,7 +254,7 @@ public:
     return (compute_timestamp_us(_SYST_CVR, 0) -
             compute_timestamp_us(adc_SYST_CVR_prev_, 0));
   }
-  
+
   //! Change the resolution of the measurement.
   /*
   *  \param bits is the number of bits of resolution.
@@ -604,6 +681,141 @@ public:
   uint16_t analog_input_to_digital_pin(uint16_t pin) { return analogInputToDigitalPin(pin); }
   uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
   uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
+
+  UInt8Array read_adc_registers(uint8_t adc_num) {
+    volatile AdcRegister_t &adc =
+      *reinterpret_cast<volatile AdcRegister_t *>(&ADC0_SC1A + 0x20000 * adc_num);
+    // Cast buffer as ADC_REGISTERS Protocol Buffer message.
+    teensy__3_1_ADC_REGISTERS result;
+
+    result.has_SC1A = true;
+    result.SC1A.has_AIEN = true;
+    result.SC1A.AIEN = adc.SC1A & ADC_SC1_AIEN;
+    result.SC1A.has_COCO = true;
+    result.SC1A.COCO = adc.SC1A & ADC_SC1_COCO;
+    result.SC1A.has_DIFF = true;
+    result.SC1A.DIFF = adc.SC1A & ADC_SC1_DIFF;
+    result.SC1A.has_ADCH = true;
+    result.SC1A.ADCH = adc.SC1A & 0x1F;
+
+    result.has_SC1B = true;
+    result.SC1B.has_AIEN = true;
+    result.SC1B.AIEN = adc.SC1B & ADC_SC1_AIEN;
+    result.SC1B.has_COCO = true;
+    result.SC1B.COCO = adc.SC1B & ADC_SC1_COCO;
+    result.SC1B.has_DIFF = true;
+    result.SC1B.DIFF = adc.SC1B & ADC_SC1_DIFF;
+    result.SC1B.has_ADCH = true;
+    result.SC1B.ADCH = adc.SC1B & 0x1F;
+
+    result.CFG1.has_ADLPC = true;
+    result.CFG1.ADLPC = adc.CFG1 & ADC_CFG1_ADLPC;
+    result.CFG1.has_ADICLK = true;
+    result.CFG1.ADICLK = (teensy__3_1_R_CFG1_E_ADICLK)(adc.CFG1 & 0x3);
+    result.CFG1.has_ADIV = true;
+    result.CFG1.ADIV = (teensy__3_1_R_CFG1_E_ADIV)((adc.CFG1 >> 5) & 0x3);
+    result.CFG1.has_ADLSMP = true;
+    result.CFG1.ADLSMP = (teensy__3_1_R_CFG1_E_ADLSMP)(adc.CFG1 & ADC_CFG1_ADLSMP);
+    result.CFG1.has_MODE = true;
+    result.CFG1.MODE = (teensy__3_1_R_CFG1_E_MODE)((adc.CFG1 >> 2) & 0x3);
+
+    result.CFG2.has_ADACKEN = true;
+    result.CFG2.ADACKEN = adc.CFG2 & ADC_CFG2_ADACKEN;
+    result.CFG2.has_ADHSC = true;
+    result.CFG2.ADHSC = adc.CFG2 & ADC_CFG2_ADHSC;
+    result.CFG2.has_ADLSTS = true;
+    result.CFG2.ADLSTS = (teensy__3_1_R_CFG2_E_ADLSTS)(adc.CFG2 & 0x3);
+    result.CFG2.has_MUXSEL = true;
+    result.CFG2.MUXSEL = (teensy__3_1_R_CFG2_E_MUXSEL)(adc.CFG2 & ADC_CFG2_MUXSEL);
+
+    result.has_RA = true;
+    result.RA = adc.RA;
+    result.has_RB = true;
+    result.RB = adc.RB;
+
+    result.has_CV1 = true;
+    result.CV1 = adc.CV1;
+    result.has_CV2 = true;
+    result.CV2 = adc.CV2;
+
+    result.has_SC2 = true;
+    result.has_SC3 = true;
+
+    result.SC2.has_ACFE = true;
+    result.SC2.ACFE = adc.SC2 & ADC_SC2_ACFE;
+    result.SC2.has_ACFGT = true;
+    result.SC2.ACFGT = adc.SC2 & ADC_SC2_ACFGT;
+    result.SC2.has_ACREN = true;
+    result.SC2.ACREN = adc.SC2 & ADC_SC2_ACREN;
+    result.SC2.has_ADACT = true;
+    result.SC2.ADACT = adc.SC2 & ADC_SC2_ADACT;
+    result.SC2.has_DMAEN = true;
+    result.SC2.DMAEN = adc.SC2 & ADC_SC2_DMAEN;
+    result.SC2.has_ADTRG = true;
+    result.SC2.ADTRG = (teensy__3_1_R_SC2_E_ADTRG)(adc.SC2 & ADC_SC2_ADTRG);
+    result.SC2.has_REFSEL = true;
+    result.SC2.REFSEL = (teensy__3_1_R_SC2_E_REFSEL)(adc.SC2 & 0x3);
+
+    result.SC3.has_ADCO = true;
+    result.SC3.ADCO = adc.SC3 & ADC_SC3_ADCO;
+    result.SC3.has_AVGE = true;
+    result.SC3.AVGE = adc.SC3 & ADC_SC3_AVGE;
+    result.SC3.has_CAL = true;
+    result.SC3.CAL = adc.SC3 & ADC_SC3_CAL;
+    result.SC3.has_CALF = true;
+    result.SC3.CALF = adc.SC3 & ADC_SC3_CALF;
+    result.SC3.has_AVGS = true;
+    result.SC3.AVGS = (teensy__3_1_R_SC3_E_AVGS)(adc.SC3 & 0x3);
+
+    result.has_OFS = true;
+    result.OFS = adc.OFS;
+
+    result.has_PGA = true;
+    result.PGA.has_PGAEN = true;
+    result.PGA.PGAEN = adc.PGA & ADC_PGA_PGAEN;
+    result.PGA.has_PGALPb = true;
+    result.PGA.PGALPb = adc.PGA & ADC_PGA_PGALPB;
+    result.PGA.has_PGAG = true;
+    result.PGA.PGAG = (teensy__3_1_R_PGA_E_PGAG)((adc.PGA >> 16) & 0xF);
+
+    result.has_CLM0 = true;
+    result.CLM0 = adc.CLM0;
+    result.has_CLM1 = true;
+    result.CLM1 = adc.CLM1;
+    result.has_CLM2 = true;
+    result.CLM2 = adc.CLM2;
+    result.has_CLM3 = true;
+    result.CLM3 = adc.CLM3;
+    result.has_CLM4 = true;
+    result.CLM4 = adc.CLM4;
+    result.has_CLMD = true;
+    result.CLMD = adc.CLMD;
+    result.has_CLMS = true;
+    result.CLMS = adc.CLMS;
+    result.has_CLP0 = true;
+    result.CLP0 = adc.CLP0;
+    result.has_CLP1 = true;
+    result.CLP1 = adc.CLP1;
+    result.has_CLP2 = true;
+    result.CLP2 = adc.CLP2;
+    result.has_CLP3 = true;
+    result.CLP3 = adc.CLP3;
+    result.has_CLP4 = true;
+    result.CLP4 = adc.CLP4;
+    result.has_CLPD = true;
+    result.CLPD = adc.CLPD;
+    result.has_CLPS = true;
+    result.CLPS = adc.CLPS;
+    result.has_MG = true;
+    result.MG = adc.MG;
+    result.has_PG = true;
+    result.PG = adc.PG;
+
+    UInt8Array output =
+      nanopb::serialize_to_array(result, teensy__3_1_ADC_REGISTERS_fields,
+                                 get_buffer());
+    return output;
+  }
 };
 
 }  // namespace teensy_minimal_rpc
