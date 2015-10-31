@@ -14,7 +14,9 @@
 #include <IntervalTimer.h>
 #include <RingBufferDMA.h>
 #include <DMAChannel.h>
-#include <TeensyMinimalRpc/ADC_pb.h>
+#include <TeensyMinimalRpc/ADC.h>
+#include <TeensyMinimalRpc/DMA.h>
+#include <TeensyMinimalRpc/SIM.h>
 #include <pb_cpp_api.h>
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
@@ -24,37 +26,6 @@ void timer0_callback(void);
 
 
 namespace teensy_minimal_rpc {
-
-struct AdcRegister_t {
-  volatile uint32_t SC1A;
-  volatile uint32_t SC1B;
-  volatile uint32_t CFG1;
-  volatile uint32_t CFG2;
-  volatile uint32_t RA;
-  volatile uint32_t RB;
-  volatile uint32_t CV1;
-  volatile uint32_t CV2;
-  volatile uint32_t SC2;
-  volatile uint32_t SC3;
-  volatile uint32_t OFS;
-  volatile uint32_t PG;
-  volatile uint32_t MG;
-  volatile uint32_t CLPD;
-  volatile uint32_t CLPS;
-  volatile uint32_t CLP4;
-  volatile uint32_t CLP3;
-  volatile uint32_t CLP2;
-  volatile uint32_t CLP1;
-  volatile uint32_t CLP0;
-  volatile uint32_t PGA;
-  volatile uint32_t CLMD;
-  volatile uint32_t CLMS;
-  volatile uint32_t CLM4;
-  volatile uint32_t CLM3;
-  volatile uint32_t CLM2;
-  volatile uint32_t CLM1;
-  volatile uint32_t CLM0;
-};
 
 // Define the array that holds the conversions here.
 // buffer_size must be a power of two.
@@ -683,139 +654,16 @@ public:
   uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
 
   UInt8Array read_adc_registers(uint8_t adc_num) {
-    volatile AdcRegister_t &adc =
-      *reinterpret_cast<volatile AdcRegister_t *>(&ADC0_SC1A + 0x20000 * adc_num);
-    // Cast buffer as ADC_REGISTERS Protocol Buffer message.
-    teensy__3_1_ADC_REGISTERS result;
-
-    result.has_SC1A = true;
-    result.SC1A.has_AIEN = true;
-    result.SC1A.AIEN = adc.SC1A & ADC_SC1_AIEN;
-    result.SC1A.has_COCO = true;
-    result.SC1A.COCO = adc.SC1A & ADC_SC1_COCO;
-    result.SC1A.has_DIFF = true;
-    result.SC1A.DIFF = adc.SC1A & ADC_SC1_DIFF;
-    result.SC1A.has_ADCH = true;
-    result.SC1A.ADCH = adc.SC1A & 0x1F;
-
-    result.has_SC1B = true;
-    result.SC1B.has_AIEN = true;
-    result.SC1B.AIEN = adc.SC1B & ADC_SC1_AIEN;
-    result.SC1B.has_COCO = true;
-    result.SC1B.COCO = adc.SC1B & ADC_SC1_COCO;
-    result.SC1B.has_DIFF = true;
-    result.SC1B.DIFF = adc.SC1B & ADC_SC1_DIFF;
-    result.SC1B.has_ADCH = true;
-    result.SC1B.ADCH = adc.SC1B & 0x1F;
-
-    result.CFG1.has_ADLPC = true;
-    result.CFG1.ADLPC = adc.CFG1 & ADC_CFG1_ADLPC;
-    result.CFG1.has_ADICLK = true;
-    result.CFG1.ADICLK = (teensy__3_1_R_CFG1_E_ADICLK)(adc.CFG1 & 0x3);
-    result.CFG1.has_ADIV = true;
-    result.CFG1.ADIV = (teensy__3_1_R_CFG1_E_ADIV)((adc.CFG1 >> 5) & 0x3);
-    result.CFG1.has_ADLSMP = true;
-    result.CFG1.ADLSMP = (teensy__3_1_R_CFG1_E_ADLSMP)(adc.CFG1 & ADC_CFG1_ADLSMP);
-    result.CFG1.has_MODE = true;
-    result.CFG1.MODE = (teensy__3_1_R_CFG1_E_MODE)((adc.CFG1 >> 2) & 0x3);
-
-    result.CFG2.has_ADACKEN = true;
-    result.CFG2.ADACKEN = adc.CFG2 & ADC_CFG2_ADACKEN;
-    result.CFG2.has_ADHSC = true;
-    result.CFG2.ADHSC = adc.CFG2 & ADC_CFG2_ADHSC;
-    result.CFG2.has_ADLSTS = true;
-    result.CFG2.ADLSTS = (teensy__3_1_R_CFG2_E_ADLSTS)(adc.CFG2 & 0x3);
-    result.CFG2.has_MUXSEL = true;
-    result.CFG2.MUXSEL = (teensy__3_1_R_CFG2_E_MUXSEL)(adc.CFG2 & ADC_CFG2_MUXSEL);
-
-    result.has_RA = true;
-    result.RA = adc.RA;
-    result.has_RB = true;
-    result.RB = adc.RB;
-
-    result.has_CV1 = true;
-    result.CV1 = adc.CV1;
-    result.has_CV2 = true;
-    result.CV2 = adc.CV2;
-
-    result.has_SC2 = true;
-    result.has_SC3 = true;
-
-    result.SC2.has_ACFE = true;
-    result.SC2.ACFE = adc.SC2 & ADC_SC2_ACFE;
-    result.SC2.has_ACFGT = true;
-    result.SC2.ACFGT = adc.SC2 & ADC_SC2_ACFGT;
-    result.SC2.has_ACREN = true;
-    result.SC2.ACREN = adc.SC2 & ADC_SC2_ACREN;
-    result.SC2.has_ADACT = true;
-    result.SC2.ADACT = adc.SC2 & ADC_SC2_ADACT;
-    result.SC2.has_DMAEN = true;
-    result.SC2.DMAEN = adc.SC2 & ADC_SC2_DMAEN;
-    result.SC2.has_ADTRG = true;
-    result.SC2.ADTRG = (teensy__3_1_R_SC2_E_ADTRG)(adc.SC2 & ADC_SC2_ADTRG);
-    result.SC2.has_REFSEL = true;
-    result.SC2.REFSEL = (teensy__3_1_R_SC2_E_REFSEL)(adc.SC2 & 0x3);
-
-    result.SC3.has_ADCO = true;
-    result.SC3.ADCO = adc.SC3 & ADC_SC3_ADCO;
-    result.SC3.has_AVGE = true;
-    result.SC3.AVGE = adc.SC3 & ADC_SC3_AVGE;
-    result.SC3.has_CAL = true;
-    result.SC3.CAL = adc.SC3 & ADC_SC3_CAL;
-    result.SC3.has_CALF = true;
-    result.SC3.CALF = adc.SC3 & ADC_SC3_CALF;
-    result.SC3.has_AVGS = true;
-    result.SC3.AVGS = (teensy__3_1_R_SC3_E_AVGS)(adc.SC3 & 0x3);
-
-    result.has_OFS = true;
-    result.OFS = adc.OFS;
-
-    result.has_PGA = true;
-    result.PGA.has_PGAEN = true;
-    result.PGA.PGAEN = adc.PGA & ADC_PGA_PGAEN;
-    result.PGA.has_PGALPb = true;
-    result.PGA.PGALPb = adc.PGA & ADC_PGA_PGALPB;
-    result.PGA.has_PGAG = true;
-    result.PGA.PGAG = (teensy__3_1_R_PGA_E_PGAG)((adc.PGA >> 16) & 0xF);
-
-    result.has_CLM0 = true;
-    result.CLM0 = adc.CLM0;
-    result.has_CLM1 = true;
-    result.CLM1 = adc.CLM1;
-    result.has_CLM2 = true;
-    result.CLM2 = adc.CLM2;
-    result.has_CLM3 = true;
-    result.CLM3 = adc.CLM3;
-    result.has_CLM4 = true;
-    result.CLM4 = adc.CLM4;
-    result.has_CLMD = true;
-    result.CLMD = adc.CLMD;
-    result.has_CLMS = true;
-    result.CLMS = adc.CLMS;
-    result.has_CLP0 = true;
-    result.CLP0 = adc.CLP0;
-    result.has_CLP1 = true;
-    result.CLP1 = adc.CLP1;
-    result.has_CLP2 = true;
-    result.CLP2 = adc.CLP2;
-    result.has_CLP3 = true;
-    result.CLP3 = adc.CLP3;
-    result.has_CLP4 = true;
-    result.CLP4 = adc.CLP4;
-    result.has_CLPD = true;
-    result.CLPD = adc.CLPD;
-    result.has_CLPS = true;
-    result.CLPS = adc.CLPS;
-    result.has_MG = true;
-    result.MG = adc.MG;
-    result.has_PG = true;
-    result.PG = adc.PG;
-
-    UInt8Array output =
-      nanopb::serialize_to_array(result, teensy__3_1_ADC_REGISTERS_fields,
-                                 get_buffer());
-    return output;
+    return teensy::adc::serialize_registers(adc_num, get_buffer());
   }
+
+  uint16_t dma_channel_count() { return DMA_NUM_CHANNELS; }
+  UInt8Array read_dma_TCD(uint8_t channel_num) {
+    return teensy::dma::serialize_TCD(channel_num, get_buffer());
+  }
+
+  UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
+  UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
 };
 
 }  // namespace teensy_minimal_rpc

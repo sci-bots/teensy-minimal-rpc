@@ -1,4 +1,4 @@
-package teensy._3_1;
+package teensy._3_1.adc;
 
 message R_SC1 {
   /* See page 653. */
@@ -107,7 +107,7 @@ message R_PGA {
   optional E_PGAG PGAG = 3;  // PGA Gain setting, $PGA~gain = 2^{PGAG}$
 }
 
-message ADC_REGISTERS {
+message Registers {
   optional R_SC1 SC1A  = 1;
   optional R_SC1 SC1B  = 2;
   optional R_CFG1 CFG1 = 3;
