@@ -672,6 +672,13 @@ public:
 
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
   UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
+  int8_t update_sim_SCGC6(UInt8Array serialized_scgc6) {
+    return teensy::sim::update_SCGC6(serialized_scgc6);
+  }
+  int8_t update_sim_SCGC7(UInt8Array serialized_scgc7) {
+    return teensy::sim::update_SCGC7(serialized_scgc7);
+  }
+
   uint32_t mem_alloc(uint32_t size) { return (uint32_t)malloc(size); }
   void mem_free(uint32_t address) { free((void *)address); }
   uint32_t mem_aligned_alloc(uint32_t alignment, uint32_t size) {
