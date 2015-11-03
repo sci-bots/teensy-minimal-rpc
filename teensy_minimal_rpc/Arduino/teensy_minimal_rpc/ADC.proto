@@ -94,7 +94,7 @@ message R_SC3 {
 message R_PGA {
   /* See page 670. */
   optional bool PGAEN = 1;  // PGA enable
-  optional bool PGALPb = 2;  // PGA low-power mode control
+  optional bool PGALPB = 2;  // PGA low-power mode control
   enum E_PGAG {
     _1 = 0;
     _2 = 1;

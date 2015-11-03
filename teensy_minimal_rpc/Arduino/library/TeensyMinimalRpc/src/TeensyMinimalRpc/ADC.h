@@ -5,6 +5,7 @@
 #include <CArrayDefs.h>  // UInt8Array
 #include <pb_cpp_api.h>  // nanopb::serialize_to_array
 #include <TeensyMinimalRpc/ADC_pb.h>
+#include <TeensyMinimalRpc/RegisterMacros.h>
 
 
 namespace teensy {

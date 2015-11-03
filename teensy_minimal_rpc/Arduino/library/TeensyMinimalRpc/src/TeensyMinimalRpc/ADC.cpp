@@ -9,28 +9,19 @@ namespace adc {
     teensy__3_1_adc_Registers result;
 
     result.has_SC1A = true;
-    result.SC1A.has_AIEN = true;
-    result.SC1A.AIEN = adc.SC1A & ADC_SC1_AIEN;
-    result.SC1A.has_COCO = true;
-    result.SC1A.COCO = adc.SC1A & ADC_SC1_COCO;
-    result.SC1A.has_DIFF = true;
-    result.SC1A.DIFF = adc.SC1A & ADC_SC1_DIFF;
-    result.SC1A.has_ADCH = true;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, AIEN, adc.SC1A)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, COCO, adc.SC1A)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, DIFF, adc.SC1A)
     result.SC1A.ADCH = adc.SC1A & 0x1F;
 
     result.has_SC1B = true;
-    result.SC1B.has_AIEN = true;
-    result.SC1B.AIEN = adc.SC1B & ADC_SC1_AIEN;
-    result.SC1B.has_COCO = true;
-    result.SC1B.COCO = adc.SC1B & ADC_SC1_COCO;
-    result.SC1B.has_DIFF = true;
-    result.SC1B.DIFF = adc.SC1B & ADC_SC1_DIFF;
-    result.SC1B.has_ADCH = true;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, AIEN, adc.SC1B)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, COCO, adc.SC1B)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, DIFF, adc.SC1B)
     result.SC1B.ADCH = adc.SC1B & 0x1F;
 
     result.has_CFG1 = true;
-    result.CFG1.has_ADLPC = true;
-    result.CFG1.ADLPC = adc.CFG1 & ADC_CFG1_ADLPC;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.CFG1, ADC_CFG1, ADLPC, adc.CFG1)
     result.CFG1.has_ADICLK = true;
     result.CFG1.ADICLK = (teensy__3_1_adc_R_CFG1_E_ADICLK)(adc.CFG1 & 0x3);
     result.CFG1.has_ADIV = true;
@@ -41,10 +32,8 @@ namespace adc {
     result.CFG1.MODE = (teensy__3_1_adc_R_CFG1_E_MODE)((adc.CFG1 >> 2) & 0x3);
 
     result.has_CFG2 = true;
-    result.CFG2.has_ADACKEN = true;
-    result.CFG2.ADACKEN = adc.CFG2 & ADC_CFG2_ADACKEN;
-    result.CFG2.has_ADHSC = true;
-    result.CFG2.ADHSC = adc.CFG2 & ADC_CFG2_ADHSC;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.CFG2, ADC_CFG2, ADACKEN, adc.CFG2)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.CFG2, ADC_CFG2, ADHSC, adc.CFG2)
     result.CFG2.has_ADLSTS = true;
     result.CFG2.ADLSTS = (teensy__3_1_adc_R_CFG2_E_ADLSTS)(adc.CFG2 & 0x3);
     result.CFG2.has_MUXSEL = true;
@@ -63,29 +52,20 @@ namespace adc {
     result.has_SC2 = true;
     result.has_SC3 = true;
 
-    result.SC2.has_ACFE = true;
-    result.SC2.ACFE = adc.SC2 & ADC_SC2_ACFE;
-    result.SC2.has_ACFGT = true;
-    result.SC2.ACFGT = adc.SC2 & ADC_SC2_ACFGT;
-    result.SC2.has_ACREN = true;
-    result.SC2.ACREN = adc.SC2 & ADC_SC2_ACREN;
-    result.SC2.has_ADACT = true;
-    result.SC2.ADACT = adc.SC2 & ADC_SC2_ADACT;
-    result.SC2.has_DMAEN = true;
-    result.SC2.DMAEN = adc.SC2 & ADC_SC2_DMAEN;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC2, ADC_SC2, ACFE, adc.SC2)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC2, ADC_SC2, ACFGT, adc.SC2)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC2, ADC_SC2, ACREN, adc.SC2)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC2, ADC_SC2, ADACT, adc.SC2)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC2, ADC_SC2, DMAEN, adc.SC2)
     result.SC2.has_ADTRG = true;
     result.SC2.ADTRG = (teensy__3_1_adc_R_SC2_E_ADTRG)(adc.SC2 & ADC_SC2_ADTRG);
     result.SC2.has_REFSEL = true;
     result.SC2.REFSEL = (teensy__3_1_adc_R_SC2_E_REFSEL)(adc.SC2 & 0x3);
 
-    result.SC3.has_ADCO = true;
-    result.SC3.ADCO = adc.SC3 & ADC_SC3_ADCO;
-    result.SC3.has_AVGE = true;
-    result.SC3.AVGE = adc.SC3 & ADC_SC3_AVGE;
-    result.SC3.has_CAL = true;
-    result.SC3.CAL = adc.SC3 & ADC_SC3_CAL;
-    result.SC3.has_CALF = true;
-    result.SC3.CALF = adc.SC3 & ADC_SC3_CALF;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC3, ADC_SC3, ADCO, adc.SC3)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC3, ADC_SC3, AVGE, adc.SC3)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC3, ADC_SC3, CAL, adc.SC3)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC3, ADC_SC3, CALF, adc.SC3)
     result.SC3.has_AVGS = true;
     result.SC3.AVGS = (teensy__3_1_adc_R_SC3_E_AVGS)(adc.SC3 & 0x3);
 
@@ -93,10 +73,8 @@ namespace adc {
     result.OFS = adc.OFS;
 
     result.has_PGA = true;
-    result.PGA.has_PGAEN = true;
-    result.PGA.PGAEN = adc.PGA & ADC_PGA_PGAEN;
-    result.PGA.has_PGALPb = true;
-    result.PGA.PGALPb = adc.PGA & ADC_PGA_PGALPB;
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.PGA, ADC_PGA, PGAEN, adc.PGA)
+    PB_SET_TEENSY_REG_BIT_FROM_VAL(result.PGA, ADC_PGA, PGALPB, adc.PGA)
     result.PGA.has_PGAG = true;
     result.PGA.PGAG = (teensy__3_1_adc_R_PGA_E_PGAG)((adc.PGA >> 16) & 0xF);
 

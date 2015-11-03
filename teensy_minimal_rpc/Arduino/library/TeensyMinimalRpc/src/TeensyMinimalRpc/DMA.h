@@ -5,6 +5,7 @@
 #include <CArrayDefs.h>  // UInt8Array
 #include <pb_cpp_api.h>  // nanopb::serialize_to_array
 #include <TeensyMinimalRpc/DMA_pb.h>
+#include <TeensyMinimalRpc/RegisterMacros.h>
 
 
 namespace teensy {
@@ -29,8 +30,18 @@ namespace dma {
     return (value & ((T)1 << bit)) != 0;
   }
 
+  inline void reset_TCD(uint8_t channel_num) {
+    const size_t tcd_size = sizeof(DMABaseClass::TCD_t);
+    // __NB__ Transfer control descriptor (TCD) range starts at address of
+    // `DMA_TCD0_SADDR`.
+    volatile DMABaseClass::TCD_t &tcd =
+      *(reinterpret_cast<volatile DMABaseClass::TCD_t *>(&DMA_TCD0_SADDR) +
+        channel_num);
+    memset((void *)&tcd, 0, tcd_size);
+  }
+
   UInt8Array serialize_TCD(uint8_t channel_num, UInt8Array buffer);
-  inline int8_t apply_TCD(uint8_t channel_num, UInt8Array tcd_data) {
+  inline int8_t update_TCD(uint8_t channel_num, UInt8Array tcd_data) {
     // Create empty DMA Registers Protocol Buffer message.
     teensy__3_1_dma_TCD tcd_new = teensy__3_1_dma_TCD_init_default;
 
@@ -160,14 +171,14 @@ namespace dma {
         CSR &= ~(0xF << 8);  // Clear existing MAJORLINKCH
         CSR |= tcd_new.CSR.MAJORLINKCH << 8;  // Set new MAJORLINKCH
       }
-      if (tcd_new.CSR.has_DONE) { bitWrite(CSR, 7, tcd_new.CSR.DONE); }
-      if (tcd_new.CSR.has_ACTIVE) { bitWrite(CSR, 6, tcd_new.CSR.ACTIVE); }
-      if (tcd_new.CSR.has_MAJORELINK) { bitWrite(CSR, 5, tcd_new.CSR.MAJORELINK); }
-      if (tcd_new.CSR.has_ESG) { bitWrite(CSR, 4, tcd_new.CSR.ESG); }
-      if (tcd_new.CSR.has_DREQ) { bitWrite(CSR, 3, tcd_new.CSR.DREQ); }
-      if (tcd_new.CSR.has_INTHALF) { bitWrite(CSR, 2, tcd_new.CSR.INTHALF); }
-      if (tcd_new.CSR.has_INTMAJOR) { bitWrite(CSR, 1, tcd_new.CSR.INTMAJOR); }
-      if (tcd_new.CSR.has_START) { bitWrite(CSR, 0, tcd_new.CSR.START); }
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, DONE, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, ACTIVE, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, MAJORELINK, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, ESG, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, DREQ, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, INTHALF, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, INTMAJOR, CSR)
+      PB_UPDATE_TEENSY_REG_BIT(tcd_new.CSR, DMA_TCD_CSR, START, CSR)
       tcd.CSR = CSR;
     }
     if (tcd_new.has_BITER_ELINKYES) {
