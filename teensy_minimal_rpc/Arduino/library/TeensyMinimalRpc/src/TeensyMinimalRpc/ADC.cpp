@@ -12,12 +12,14 @@ namespace adc {
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, AIEN, adc.SC1A)
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, COCO, adc.SC1A)
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1A, ADC_SC1, DIFF, adc.SC1A)
+    result.SC1A.has_ADCH = true;
     result.SC1A.ADCH = adc.SC1A & 0x1F;
 
     result.has_SC1B = true;
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, AIEN, adc.SC1B)
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, COCO, adc.SC1B)
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result.SC1B, ADC_SC1, DIFF, adc.SC1B)
+    result.SC1B.has_ADCH = true;
     result.SC1B.ADCH = adc.SC1B & 0x1F;
 
     result.has_CFG1 = true;
@@ -37,7 +39,7 @@ namespace adc {
     result.CFG2.has_ADLSTS = true;
     result.CFG2.ADLSTS = (teensy__3_1_adc_R_CFG2_E_ADLSTS)(adc.CFG2 & 0x3);
     result.CFG2.has_MUXSEL = true;
-    result.CFG2.MUXSEL = (teensy__3_1_adc_R_CFG2_E_MUXSEL)((adc.CFG2 >> 5) & 0x1);
+    result.CFG2.MUXSEL = (teensy__3_1_adc_R_CFG2_E_MUXSEL)((adc.CFG2 >> 4) & 0x1);
 
     result.has_RA = true;
     result.RA = adc.RA;
@@ -115,6 +117,127 @@ namespace adc {
       nanopb::serialize_to_array(result, teensy__3_1_adc_Registers_fields,
                                  buffer);
     return output;
+  }
+
+  int8_t update_registers(uint8_t adc_num, UInt8Array serialized_registers) {
+    // Create empty ADC Registers Protocol Buffer message.
+    teensy__3_1_adc_Registers adc_msg = teensy__3_1_adc_Registers_init_default;
+
+    bool ok = nanopb::decode_from_array(serialized_registers,
+                                        teensy__3_1_adc_Registers_fields,
+                                        adc_msg);
+
+    if (!ok) { return -1; }
+
+    volatile AdcRegister_t &adc =
+      *(reinterpret_cast<volatile AdcRegister_t *>(&ADC0_SC1A) + adc_num);
+    // Cast buffer as ADC_REGISTERS Protocol Buffer message.
+
+    if (adc_msg.has_SC1A) {
+      uint32_t SC1A = adc.SC1A;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, AIEN, SC1A)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, COCO, SC1A)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, DIFF, SC1A)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC1A, 5, 0, ADCH, SC1A)
+    }
+
+    if (adc_msg.has_SC1B) {
+      uint32_t SC1B = adc.SC1B;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1B, ADC_SC1, AIEN, SC1B)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1B, ADC_SC1, COCO, SC1B)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1B, ADC_SC1, DIFF, SC1B)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC1B, 5, 0, ADCH, SC1B)
+      adc.SC1B = SC1B;
+    }
+
+    if (adc_msg.has_CFG1) {
+      uint32_t CFG1 = adc.CFG1;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.CFG1, ADC_CFG1, ADLPC, CFG1)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.CFG1, 2, 5, ADIV, CFG1)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.CFG1, ADC_CFG1, ADLSMP, CFG1)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.CFG1, 2, 2, MODE, CFG1)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.CFG1, 2, 0, ADICLK, CFG1)
+
+      adc.CFG1 = CFG1;
+    }
+
+    if (adc_msg.has_CFG2) {
+      uint32_t CFG2 = adc.CFG2;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.CFG2, ADC_CFG2, MUXSEL, CFG2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.CFG2, ADC_CFG2, ADACKEN, CFG2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.CFG2, ADC_CFG2, ADHSC, CFG2)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.CFG2, 2, 0, ADLSTS, CFG2)
+
+      adc.CFG2 = CFG2;
+    }
+
+    if (adc_msg.has_RA) { adc.RA = adc_msg.RA; }
+    if (adc_msg.has_RB) { adc.RB = adc_msg.RB; }
+    if (adc_msg.has_CV1) { adc.CV1 = adc_msg.CV1; }
+    if (adc_msg.has_CV2) { adc.CV2 = adc_msg.CV2; }
+
+    if (adc_msg.has_SC2) {
+      uint32_t SC2 = adc.SC2;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, ADACT, SC2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, ADTRG, SC2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, ACFE, SC2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, ACFGT, SC2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, ACREN, SC2)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC2, ADC_SC2, DMAEN, SC2)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC2, 2, 0, REFSEL, SC2)
+
+      adc.SC2 = SC2;
+    }
+
+    if (adc_msg.has_SC3) {
+      uint32_t SC3 = adc.SC3;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC3, ADC_SC3, CAL, SC3)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC3, ADC_SC3, CALF, SC3)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC3, ADC_SC3, ADCO, SC3)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC3, ADC_SC3, AVGE, SC3)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC3, 2, 0, AVGS, SC3)
+
+      adc.SC3 = SC3;
+    }
+
+    if (adc_msg.has_OFS) { adc.OFS = adc_msg.OFS; }
+
+    adc_msg.has_PGA = true;
+    if (adc_msg.has_PGA) {
+      uint32_t PGA = adc.PGA;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.PGA, ADC_PGA, PGAEN, PGA)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.PGA, ADC_PGA, PGALPB, PGA)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.PGA, 4, 16, PGAG, PGA)
+
+      adc.PGA = PGA;
+    }
+
+    if (adc_msg.has_CLM0) { adc.CLM0 = adc_msg.CLM0; }
+    if (adc_msg.has_CLM1) { adc.CLM1 = adc_msg.CLM1; }
+    if (adc_msg.has_CLM2) { adc.CLM2 = adc_msg.CLM2; }
+    if (adc_msg.has_CLM3) { adc.CLM3 = adc_msg.CLM3; }
+    if (adc_msg.has_CLM4) { adc.CLM4 = adc_msg.CLM4; }
+    if (adc_msg.has_CLMD) { adc.CLMD = adc_msg.CLMD; }
+    if (adc_msg.has_CLMS) { adc.CLMS = adc_msg.CLMS; }
+    if (adc_msg.has_CLP0) { adc.CLP0 = adc_msg.CLP0; }
+    if (adc_msg.has_CLP1) { adc.CLP1 = adc_msg.CLP1; }
+    if (adc_msg.has_CLP2) { adc.CLP2 = adc_msg.CLP2; }
+    if (adc_msg.has_CLP3) { adc.CLP3 = adc_msg.CLP3; }
+    if (adc_msg.has_CLP4) { adc.CLP4 = adc_msg.CLP4; }
+    if (adc_msg.has_CLPD) { adc.CLPD = adc_msg.CLPD; }
+    if (adc_msg.has_CLPS) { adc.CLPS = adc_msg.CLPS; }
+    if (adc_msg.has_MG) { adc.MG = adc_msg.MG; }
+    if (adc_msg.has_PG) { adc.PG = adc_msg.PG; }
+
+    //return 0;
+    return adc_msg.CFG2.ADLSTS;
   }
 }  // namespace adc
 }  // namespace teensy

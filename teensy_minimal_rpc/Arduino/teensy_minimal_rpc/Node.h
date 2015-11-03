@@ -658,6 +658,9 @@ public:
   UInt8Array read_adc_registers(uint8_t adc_num) {
     return teensy::adc::serialize_registers(adc_num, get_buffer());
   }
+  int8_t update_adc_registers(uint8_t adc_num, UInt8Array serialized_adc_msg) {
+    return teensy::adc::update_registers(adc_num, serialized_adc_msg);
+  }
 
   uint16_t dma_channel_count() { return DMA_NUM_CHANNELS; }
   UInt8Array read_dma_TCD(uint8_t channel_num) {

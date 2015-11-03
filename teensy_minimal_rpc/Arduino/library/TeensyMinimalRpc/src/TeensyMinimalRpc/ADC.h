@@ -42,6 +42,7 @@ namespace adc {
   };
 
   UInt8Array serialize_registers(uint8_t adc_num, UInt8Array buffer);
+  int8_t update_registers(uint8_t adc_num, UInt8Array serialized_registers);
 }  // namespace adc
 }  // namespace teensy
 
