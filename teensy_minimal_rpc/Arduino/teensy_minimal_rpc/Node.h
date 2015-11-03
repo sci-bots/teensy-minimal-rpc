@@ -663,6 +663,9 @@ public:
   UInt8Array read_dma_TCD(uint8_t channel_num) {
     return teensy::dma::serialize_TCD(channel_num, get_buffer());
   }
+  int8_t reset_dma_TCD(uint8_t channel_num) {
+    teensy::dma::reset_TCD(channel_num);
+  }
   int8_t update_dma_TCD(uint8_t channel_num, UInt8Array serialized_tcd) {
     return teensy::dma::update_TCD(channel_num, serialized_tcd);
   }
