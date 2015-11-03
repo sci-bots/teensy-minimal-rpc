@@ -42,6 +42,7 @@ LIB_PROPERTIES.update(OrderedDict([('author', 'Christian Fobel'),
                                    ('architectures', 'avr')]))
 
 options(
+    pointer_width=32,
     rpc_module=rpc_module,
     PROPERTIES=PROPERTIES,
     LIB_PROPERTIES=LIB_PROPERTIES,

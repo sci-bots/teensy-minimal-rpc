@@ -1,6 +1,7 @@
 #ifndef ___NODE__H___
 #define ___NODE__H___
 
+#include <string.h>
 #include <stdint.h>
 #include <Arduino.h>
 #include <NadaMQ.h>
@@ -17,6 +18,7 @@
 #include <TeensyMinimalRpc/ADC.h>
 #include <TeensyMinimalRpc/DMA.h>
 #include <TeensyMinimalRpc/SIM.h>
+#include <TeensyMinimalRpc/aligned_alloc.h>
 #include <pb_cpp_api.h>
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
@@ -68,9 +70,9 @@ public:
            adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
            adc_count_(0), adc_read_active_(false) {
     pinMode(LED_BUILTIN, OUTPUT);
-   }
+  }
 
-  UInt8Array get_buffer() { return UInt8Array(sizeof(buffer_), buffer_); }
+  UInt8Array get_buffer() { return UInt8Array_init(sizeof(buffer_), buffer_); }
   /* This is a required method to provide a temporary buffer to the
    * `BaseNode...` classes. */
 
@@ -664,6 +666,41 @@ public:
 
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
   UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
+  uint32_t mem_alloc(uint32_t size) { return (uint32_t)malloc(size); }
+  void mem_free(uint32_t address) { free((void *)address); }
+  uint32_t mem_aligned_alloc(uint32_t alignment, uint32_t size) {
+    return (uint32_t)aligned_malloc(alignment, size);
+  }
+  void mem_aligned_free(uint32_t addr) { aligned_free((void *)addr); }
+  uint32_t mem_aligned_alloc_and_set(uint32_t alignment, UInt8Array data) {
+    // Allocate aligned memory.
+    const uint32_t address = (uint32_t)aligned_malloc(alignment, data.length);
+    if (!address) { return NULL; }
+    // Copy data to allocated memory.
+    mem_cpy_host_to_device(address, data);
+    return address;
+  }
+  void mem_cpy_host_to_device(uint32_t address, UInt8Array data) {
+    memcpy((uint8_t *)address, data.data, data.length);
+  }
+  UInt8Array mem_cpy_device_to_host(uint32_t address, uint32_t size) {
+    UInt8Array output;
+    output.length = size;
+    output.data = (uint8_t *)address;
+    return output;
+  }
+  void mem_fill_uint8(uint32_t address, uint8_t value, uint32_t size) {
+    mem_fill((uint8_t *)address, value, size);
+  }
+  void mem_fill_uint16(uint32_t address, uint16_t value, uint32_t size) {
+    mem_fill((uint16_t *)address, value, size);
+  }
+  void mem_fill_uint32(uint32_t address, uint32_t value, uint32_t size) {
+    mem_fill((uint32_t *)address, value, size);
+  }
+  void mem_fill_float(uint32_t address, float value, uint32_t size) {
+    mem_fill((float *)address, value, size);
+  }
 };
 
 }  // namespace teensy_minimal_rpc
