@@ -1,0 +1,29 @@
+package teensy._3_1.pit;
+
+message R_MCR {
+  optional bool MDIS = 1;  // Module Disable (PIT_MCR, 37.3.1/903)
+  optional bool FRZ = 2;  // Freeze (PIT_MCR, 37.3.1/903)
+}
+
+message R_TCTRL {
+  // Timer Control Register (37.3.4/905)
+  optional bool CHN = 1;  // Chain Mode (PIT_TCTRL, 37.3.4/905)
+  optional bool TIE = 2;  // Timer Interrupt Enable (PIT_TCTRL, 37.3.4/905)
+  optional bool TEN = 3;  // Timer Enable (PIT_TCTRL, 37.3.4/905)
+}
+
+message R_TFLG {
+  // Timer Flag Register (37.3.5/906)
+  optional bool TIF = 1;  // Timer Interrupt Flag (PIT_TFLG, 37.3.5/906)
+}
+
+message TimerConfig {
+  optional uint32 LDVAL = 1;  // Timer Load Value Register (37.3.2/904)
+  optional uint32 CVAL = 2;  // Current Timer Value Register (37.3.3/905)
+  optional R_TCTRL TCTRL = 3;  // Timer Control Register (37.3.4/905)
+  optional R_TFLG  TFLG = 4;  // Timer Flag Register (37.3.5/906)
+}
+
+message Registers {
+  optional R_MCR MCR = 1;  // PIT Module Control Register (37.3.1/903)
+}

@@ -16,9 +16,10 @@
 #include <IntervalTimer.h>
 #include <RingBufferDMA.h>
 #include <DMAChannel.h>
-#include <TeensyMinimalRpc/ADC.h>
-#include <TeensyMinimalRpc/SIM.h>
+#include <TeensyMinimalRpc/ADC.h>  // Analog to digital converter
 #include <TeensyMinimalRpc/DMA.h>  // Direct Memory Access
+#include <TeensyMinimalRpc/SIM.h>  // System integration module (clock gating)
+#include <TeensyMinimalRpc/PIT.h>  // Programmable interrupt timer
 #include <TeensyMinimalRpc/aligned_alloc.h>
 #include <pb_cpp_api.h>
 #include <LinkedList.h>
@@ -665,6 +666,20 @@ public:
   }
   int8_t update_adc_registers(uint8_t adc_num, UInt8Array serialized_adc_msg) {
     return teensy::adc::update_registers(adc_num, serialized_adc_msg);
+  }
+
+  UInt8Array read_pit_registers() {
+    return teensy::pit::serialize_registers(get_buffer());
+  }
+  int8_t update_pit_registers(UInt8Array serialized_pit_msg) {
+    return teensy::pit::update_registers(serialized_pit_msg);
+  }
+  UInt8Array read_pit_timer_config(uint8_t timer_index) {
+    return teensy::pit::serialize_timer_config(timer_index, get_buffer());
+  }
+  int8_t update_pit_timer_config(uint32_t index,
+                                 UInt8Array serialized_config) {
+    return teensy::pit::update_timer_config(index, serialized_config);
   }
 
   uint16_t dma_channel_count() { return DMA_NUM_CHANNELS; }
