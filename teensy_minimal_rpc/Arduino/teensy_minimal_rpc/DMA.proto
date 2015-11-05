@@ -116,6 +116,13 @@ message R_CR {
 }
 
 
+message MUX_CHCFG {
+  optional bool ENBL = 1; // DMA Channel Enable (20.3.1/366)
+  optional bool TRIG = 2; // DMA Channel Trigger Enable (20.3.1/366)
+  optional uint32 SOURCE = 3; // DMA Channel Source (Slot) (20.3.1/366)
+}
+
+
 message R_ES {
   optional bool VLD      = 1; // Logical OR of all ERR status bits
   optional bool ECX      = 2; // Transfer Cancelled

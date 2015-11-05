@@ -2,6 +2,7 @@
 #include "EEPROM.h"
 #include "SPI.h"
 #include "Wire.h"
+#include "LinkedList.h"
 #include "Memory.h"  // Required replacing memory functions with stubs returning 0.
 #include "ArduinoRpc.h"
 #include "nanopb.h"

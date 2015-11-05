@@ -1,6 +1,7 @@
 #ifndef ___NODE__H___
 #define ___NODE__H___
 
+#include <list>
 #include <string.h>
 #include <stdint.h>
 #include <Arduino.h>
@@ -16,10 +17,11 @@
 #include <RingBufferDMA.h>
 #include <DMAChannel.h>
 #include <TeensyMinimalRpc/ADC.h>
-#include <TeensyMinimalRpc/DMA.h>
 #include <TeensyMinimalRpc/SIM.h>
+#include <TeensyMinimalRpc/DMA.h>  // Direct Memory Access
 #include <TeensyMinimalRpc/aligned_alloc.h>
 #include <pb_cpp_api.h>
+#include <LinkedList.h>
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
 
@@ -65,6 +67,8 @@ public:
   uint32_t adc_SYST_CVR_prev_;
   uint32_t adc_count_;
   bool adc_read_active_;
+  LinkedList<uint32_t> allocations_;
+  LinkedList<uint32_t> aligned_allocations_;
 
   Node() : BaseNode(), dmaBuffer_(NULL),
            adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
@@ -666,11 +670,20 @@ public:
   UInt8Array read_dma_TCD(uint8_t channel_num) {
     return teensy::dma::serialize_TCD(channel_num, get_buffer());
   }
-  int8_t reset_dma_TCD(uint8_t channel_num) {
+  void reset_dma_TCD(uint8_t channel_num) {
     teensy::dma::reset_TCD(channel_num);
   }
   int8_t update_dma_TCD(uint8_t channel_num, UInt8Array serialized_tcd) {
     return teensy::dma::update_TCD(channel_num, serialized_tcd);
+  }
+  UInt8Array read_dma_priority(uint8_t channel_num) {
+    return teensy::dma::serialize_dchpri(channel_num, get_buffer());
+  }
+  UInt8Array read_dma_registers() {
+    return teensy::dma::serialize_registers(get_buffer());
+  }
+  int8_t update_dma_registers(UInt8Array serialized_dma_msg) {
+    return teensy::dma::update_registers(serialized_dma_msg);
   }
 
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
@@ -682,16 +695,42 @@ public:
     return teensy::sim::update_SCGC7(serialized_scgc7);
   }
 
-  uint32_t mem_alloc(uint32_t size) { return (uint32_t)malloc(size); }
-  void mem_free(uint32_t address) { free((void *)address); }
-  uint32_t mem_aligned_alloc(uint32_t alignment, uint32_t size) {
-    return (uint32_t)aligned_malloc(alignment, size);
+  void free_all() {
+    while (allocations_.size() > 0) { free((void *)allocations_.shift()); }
+    while (aligned_allocations_.size() > 0) {
+      aligned_free((void *)aligned_allocations_.shift());
+    }
   }
-  void mem_aligned_free(uint32_t addr) { aligned_free((void *)addr); }
+  uint32_t mem_alloc(uint32_t size) {
+    uint32_t address = (uint32_t)malloc(size);
+    // Save to list of allocations for memory management.
+    allocations_.add(address);
+    return address;
+  }
+  void mem_free(uint32_t address) {
+    for (int i = 0; i < allocations_.size(); i++) {
+      if (allocations_.get(i) == address) { allocations_.remove(i); }
+    }
+    free((void *)address);
+  }
+  uint32_t mem_aligned_alloc(uint32_t alignment, uint32_t size) {
+    uint32_t address = (uint32_t)aligned_malloc(alignment, size);
+    // Save to list of allocations for memory management.
+    aligned_allocations_.add(address);
+    return address;
+  }
+  void mem_aligned_free(uint32_t address) {
+    for (int i = 0; i < aligned_allocations_.size(); i++) {
+      if (aligned_allocations_.get(i) == address) {
+        aligned_allocations_.remove(i);
+      }
+    }
+    aligned_free((void *)address);
+  }
   uint32_t mem_aligned_alloc_and_set(uint32_t alignment, UInt8Array data) {
     // Allocate aligned memory.
-    const uint32_t address = (uint32_t)aligned_malloc(alignment, data.length);
-    if (!address) { return NULL; }
+    const uint32_t address = mem_aligned_alloc(alignment, data.length);
+    if (!address) { return 0; }
     // Copy data to allocated memory.
     mem_cpy_host_to_device(address, data);
     return address;

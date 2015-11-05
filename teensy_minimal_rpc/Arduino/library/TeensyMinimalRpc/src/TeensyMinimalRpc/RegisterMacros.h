@@ -19,6 +19,15 @@
    } \
   }
 
+#define PB_UPDATE_TEENSY_BIT(MSG, shift, FIELD, OUTPUT) \
+  if ( MSG.has_##FIELD ) { \
+   if ( MSG.FIELD ) { \
+     OUTPUT |= 1 << shift; \
+   } else { \
+     OUTPUT &= ~(1 << shift); \
+   } \
+  }
+
 
 /*
  * Update bit-range in `OUTPUT` value with integer field value that is
@@ -45,20 +54,42 @@
 
 /*
  * Set value of each Protocol Buffer field according to value of corresponding
- * bit in `REG` register.
- */
-#define PB_SET_TEENSY_REG_BIT(MSG, REG, FIELD) \
-  MSG.has_##FIELD = true; \
-  MSG.FIELD = REG & REG##_##FIELD;
-/*
- * Set value of each Protocol Buffer field according to value of corresponding
  * bit (identified by bit mask for `REG`) in `VAL` variable.
  *
  * This macro allows, e.g., a register to be pre-loaded into a variable, `VAL`,
  * to perform bit look-ups.
  */
 #define PB_SET_TEENSY_REG_BIT_FROM_VAL(MSG, REG, FIELD, VAL) \
+  { \
   MSG.has_##FIELD = true; \
-  MSG.FIELD = VAL & REG##_##FIELD;
+  MSG.FIELD = VAL & REG##_##FIELD; \
+  }
+
+#define PB_SET_TEENSY_BIT_FROM_VAL(MSG, shift, FIELD, VAL) \
+  { \
+  MSG.has_##FIELD = true; \
+  MSG.FIELD = (VAL >> shift) & 0x1; \
+  }
+
+/*
+ * Set value of each Protocol Buffer field according to value of corresponding
+ * bit in `REG` register.
+ */
+#define PB_SET_TEENSY_REG_BIT(MSG, REG, FIELD) \
+  { \
+  MSG.has_##FIELD = true; \
+  MSG.FIELD = REG & REG##_##FIELD; \
+  }
+
+
+#define PB_SET_TEENSY_REG_BITS_FROM_VAL(MSG, width, shift, FIELD, VAL, TYPE) \
+  {\
+  MSG.has_##FIELD = true; \
+  uint32_t mask = 0; \
+  for (int mask_i = 0; mask_i < width; mask_i++) { \
+    mask |= (1 << mask_i); \
+  } \
+  MSG.FIELD = (TYPE)((VAL >> shift) & mask); \
+  }
 
 #endif  // #ifndef ___TEENSY__REGISTER_MACROS__H___
