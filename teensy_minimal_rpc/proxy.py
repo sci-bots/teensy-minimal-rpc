@@ -12,6 +12,61 @@ try:
         '''
         host_package_name = str(path(__file__).parent.name.replace('_', '-'))
 
+        def __init__(self, *args, **kwargs):
+            super(ProxyMixin, self).__init__(*args, **kwargs)
+            self.init_dma()
+
+        def init_dma(self):
+            '''
+            Initialize eDMA engine.  This includes:
+
+             - Enabling clock gating for DMA and DMA mux.
+             - Resetting all DMA channel transfer control descriptors.
+
+            See the following sections in [K20P64M72SF1RM][1] for more information:
+
+             - (12.2.13/256) System Clock Gating Control Register 6 (SIM_SCGC6)
+             - (12.2.14/259) System Clock Gating Control Register 7 (SIM_SCGC7)
+             - (21.3.17/415) TCD registers
+            '''
+            from .SIM import R_SCGC6, R_SCGC7
+
+            # Enable DMA-related clocks in clock-gating configuration
+            # registers.
+            # SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+            self.update_sim_SCGC6(R_SCGC6(DMAMUX=True))
+            # SIM_SCGC7 |= SIM_SCGC7_DMA;
+            self.update_sim_SCGC7(R_SCGC7(DMA=True))
+
+            # Reset all DMA transfer control descriptor registers (i.e., set to
+            # 0).
+            for i in xrange(self.dma_channel_count()):
+                self.reset_dma_TCD(i)
+
+        def DMA_TCD(self, dma_channel):
+            from arduino_rpc.protobuf import resolve_field_values
+            import arduino_helpers.hardware.teensy.dma as dma
+            from .DMA import TCD
+
+            tcd = TCD.FromString(self.read_dma_TCD(dma_channel).tostring())
+            df_tcd = resolve_field_values(tcd)
+            return (df_tcd[['full_name', 'value']].dropna()
+                    .join(dma.TCD_DESCRIPTIONS, on='full_name')
+                    [['full_name', 'value', 'short_description', 'page']]
+                    .sort_values(['page','full_name']))
+
+        def DMA_registers(self):
+            from arduino_rpc.protobuf import resolve_field_values
+            import arduino_helpers.hardware.teensy.dma as dma
+            from .DMA import Registers
+
+            dma_registers = (Registers
+                             .FromString(self.read_dma_registers().tostring()))
+            df_dma = resolve_field_values(dma_registers)
+            return (df_dma.dropna(subset=['value'])
+                    .join(dma.REGISTERS_DESCRIPTIONS, on='full_name')
+                    [['full_name', 'value', 'short_description', 'page']])
+
         @property
         def config(self):
             from .config import Config
