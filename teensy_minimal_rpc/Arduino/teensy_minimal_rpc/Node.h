@@ -200,6 +200,7 @@ public:
   uint32_t V__SYST_CVR() { return SYST_CVR; }
   uint32_t V__SCB_ICSR() { return SCB_ICSR; }
   uint32_t D__F_CPU() { return F_CPU; }
+  uint32_t D__F_BUS() { return F_BUS; }
 
   void on_adc_done() {
     if (adc_read_active_) return;
@@ -298,7 +299,7 @@ public:
     float a = 1e6;
     float b = 1e7;
     uint32_t start = micros();
-    for (int i = 0; i < N; i++) {
+    for (uint32_t i = 0; i < N; i++) {
       a /= b;
     }
     return (micros() - start);
@@ -308,7 +309,7 @@ public:
     uint32_t a = 1e6;
     uint32_t b = 1e7;
     uint32_t start = micros();
-    for (int i = 0; i < N; i++) {
+    for (uint32_t i = 0; i < N; i++) {
       a /= b;
     }
     return (micros() - start);
