@@ -3,6 +3,20 @@ try:
     from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
                        SerialProxy as _SerialProxy)
 
+    HW_TCDS_ADDR = 0x40009000
+    TCD_RECORD_DTYPE = [('SADDR', 'uint32'),
+                        ('SOFF', 'uint16'),
+                        ('ATTR', 'uint16'),
+                        ('NBYTES', 'uint32'),
+                        ('SLAST', 'uint32'),
+                        ('DADDR', 'uint32'),
+                        ('DOFF', 'uint16'),
+                        ('CITER', 'uint16'),
+                        ('DLASTSGA', 'uint32'),
+                        ('CSR', 'uint16'),
+                        ('BITER', 'uint16')]
+
+
     class ProxyMixin(object):
         '''
         Mixin class to add convenience wrappers around methods of the generated
@@ -66,6 +80,54 @@ try:
             return (df_dma.dropna(subset=['value'])
                     .join(dma.REGISTERS_DESCRIPTIONS, on='full_name')
                     [['full_name', 'value', 'short_description', 'page']])
+
+        def tcd_msg_to_struct(self, tcd_msg):
+            '''
+            Convert Transfer Control Descriptor from Protocol Buffer message
+            encoding to raw structure, i.e., 32 bytes starting from `SADDR`
+            field.
+
+            See 21.3.17/415 in the [manual][1] for more details.
+
+            [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+            '''
+            # Copy TCD to device so that we can extract the raw bytes from
+            # device memory (raw TCD bytes are read into `tcd0`.
+            #
+            # __TODO__:
+            #  - Modify `TeensyMinimalRpc/DMA.h::serialize_TCD` and
+            #  `TeensyMinimalRpc/DMA.h::update_TCD` functions to work offline.
+            #      * Operate on variable by reference, on-device use actual register.
+            #  - Add `arduino_helpers.hardware.teensy` function to convert
+            #    between TCD protobuf message and binary TCD struct.
+
+            self.update_dma_TCD(0, tcd_msg)
+            return (self.mem_cpy_device_to_host(HW_TCDS_ADDR, 32)
+                    .view(TCD_RECORD_DTYPE)[0])
+
+        def tcd_struct_to_msg(self, tcd_struct):
+            '''
+            Convert Transfer Control Descriptor from raw structure (i.e., 32
+            bytes starting from `SADDR` field) to Protocol Buffer message
+            encoding.
+
+            See 21.3.17/415 in the [manual][1] for more details.
+
+            [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+            '''
+            from .DMA import TCD
+
+            # Copy TCD structure to device so that we can extract the serialized protocol
+            # buffer representation from the device.
+            #
+            # __TODO__:
+            #  - Modify `TeensyMinimalRpc/DMA.h::serialize_TCD` and
+            #    `TeensyMinimalRpc/DMA.h::update_TCD` functions to work offline.
+            #      * Operate on variable by reference, on-device use actual register.
+            #  - Add `arduino_helpers.hardware.teensy` function to convert between TCD
+            #    protobuf message and binary TCD struct.
+            self.mem_cpy_host_to_device(HW_TCDS_ADDR, tcd_struct.tostring())
+            return TCD.FromString(self.read_dma_TCD(0).tostring())
 
         @property
         def config(self):
