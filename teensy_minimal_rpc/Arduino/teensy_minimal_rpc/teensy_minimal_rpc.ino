@@ -13,13 +13,11 @@
 #include "BaseNodeRpc.h"  // Check for changes (may have removed some include statements...
 #include "TeensyMinimalRpc.h"
 #include "ADC.h"
-#include <IntervalTimer.h>
 #include "Node.h"
 
 
 teensy_minimal_rpc::Node node_obj;
 teensy_minimal_rpc::CommandProcessor<teensy_minimal_rpc::Node> command_processor(node_obj);
-IntervalTimer timer0; // timer
 
 // when the measurement finishes, this will be called
 // first: see which pin finished and then save the measurement into the correct buffer
@@ -46,4 +44,3 @@ void loop() {
 }
 
 
-void timer0_callback(void) { node_obj.on_tick(); }

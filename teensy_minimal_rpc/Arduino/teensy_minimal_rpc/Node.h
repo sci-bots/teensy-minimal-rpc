@@ -13,7 +13,6 @@
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
-#include <IntervalTimer.h>
 #include <RingBufferDMA.h>
 #include <DMAChannel.h>
 #include <TeensyMinimalRpc/ADC.h>  // Analog to digital converter
@@ -26,8 +25,7 @@
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
 
-extern IntervalTimer timer0; // timer
-void timer0_callback(void);
+//void timer0_callback(void);
 
 
 namespace teensy_minimal_rpc {
@@ -177,13 +175,7 @@ public:
     adc_->setReference(type, adc_num);
   }
 
-  void start_timer(uint32_t period) {
-    timer0.begin(timer0_callback, period);
-  }
 
-  void stop_timer() {
-    timer0.end();
-  }
 
   void on_tick() {
     if (adc_read_active_) return;
