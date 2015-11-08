@@ -701,6 +701,15 @@ public:
   int8_t update_dma_registers(UInt8Array serialized_dma_msg) {
     return teensy::dma::update_registers(serialized_dma_msg);
   }
+  UInt8Array read_dma_mux_chcfg(uint8_t channel_num) {
+    return teensy::dma::serialize_mux_chcfg(channel_num, get_buffer());
+  }
+  int8_t update_dma_mux_chcfg(uint8_t channel_num, UInt8Array serialized_mux) {
+    return teensy::dma::update_mux_chcfg(channel_num, serialized_mux);
+  }
+  void clear_dma_errors() {
+    DMA_CERR = DMA_CERR_CAEI;  // Clear All Error Indicators
+  }
 
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
   UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
