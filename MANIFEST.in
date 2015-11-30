@@ -9,3 +9,5 @@ include SConstruct
 recursive-include teensy_minimal_rpc *
 recursive-exclude teensy_minimal_rpc *.pyc
 recursive-exclude teensy_minimal_rpc *.o
+recursive-exclude teensy_minimal_rpc *.exe
+recursive-exclude teensy_minimal_rpc .ipynb_checkpoints/*

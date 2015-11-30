@@ -31,3 +31,4 @@ teensy_minimal_rpc/ADC.py
 teensy_minimal_rpc/DMA.py
 teensy_minimal_rpc/PIT.py
 teensy_minimal_rpc/SIM.py
+*.exe
