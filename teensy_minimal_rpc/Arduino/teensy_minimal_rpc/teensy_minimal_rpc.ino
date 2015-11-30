@@ -2,6 +2,7 @@
 #include "EEPROM.h"
 #include "SPI.h"
 #include "Wire.h"
+#include "LinkedList.h"
 #include "Memory.h"  // Required replacing memory functions with stubs returning 0.
 #include "ArduinoRpc.h"
 #include "nanopb.h"
@@ -20,6 +21,12 @@ teensy_minimal_rpc::Node node_obj;
 teensy_minimal_rpc::CommandProcessor<teensy_minimal_rpc::Node> command_processor(node_obj);
 IntervalTimer timer0; // timer
 
+// when the measurement finishes, this will be called
+// first: see which pin finished and then save the measurement into the correct buffer
+void adc0_isr() {
+  node_obj.on_adc_done();
+  //ADC0_RA; // clear interrupt
+}
 
 void serialEvent() { node_obj.serial_handler_.receiver()(Serial.available()); }
 
@@ -40,4 +47,3 @@ void loop() {
 
 
 void timer0_callback(void) { node_obj.on_tick(); }
-

@@ -1,6 +1,8 @@
 #ifndef ___NODE__H___
 #define ___NODE__H___
 
+#include <list>
+#include <string.h>
 #include <stdint.h>
 #include <Arduino.h>
 #include <NadaMQ.h>
@@ -12,12 +14,31 @@
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <IntervalTimer.h>
+#include <RingBufferDMA.h>
+#include <DMAChannel.h>
+#include <TeensyMinimalRpc/ADC.h>  // Analog to digital converter
+#include <TeensyMinimalRpc/DMA.h>  // Direct Memory Access
+#include <TeensyMinimalRpc/SIM.h>  // System integration module (clock gating)
+#include <TeensyMinimalRpc/PIT.h>  // Programmable interrupt timer
+#include <TeensyMinimalRpc/aligned_alloc.h>
+#include <pb_cpp_api.h>
+#include <LinkedList.h>
+
+const uint32_t ADC_BUFFER_SIZE = 4096;
 
 extern IntervalTimer timer0; // timer
 void timer0_callback(void);
 
 
 namespace teensy_minimal_rpc {
+
+// Define the array that holds the conversions here.
+// buffer_size must be a power of two.
+// The buffer is stored with the correct alignment in the DMAMEM section
+// the +0 in the aligned attribute is necessary b/c of a bug in gcc.
+DMAMEM static volatile int16_t __attribute__((aligned(ADC_BUFFER_SIZE+0))) adc_buffer[ADC_BUFFER_SIZE];
+
+
 const size_t FRAME_SIZE = (3 * sizeof(uint8_t)  // Frame boundary
                            - sizeof(uint16_t)  // UUID
                            - sizeof(uint16_t)  // Payload length
@@ -31,14 +52,32 @@ class Node :
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
-  static const uint16_t BUFFER_SIZE = 128;  // >= longest property string
+  static const uint32_t BUFFER_SIZE = 8192;  // >= longest property string
+
+  // use dma with ADC0
+  RingBufferDMA *dmaBuffer_;
 
   uint8_t buffer_[BUFFER_SIZE];
   ADC *adc_;
+  uint32_t adc_period_us_;
+  uint32_t adc_timestamp_us_;
+  bool adc_tick_tock_;
+  uint32_t adc_millis_;
+  uint32_t adc_SYST_CVR_;
+  uint32_t adc_millis_prev_;
+  uint32_t adc_SYST_CVR_prev_;
+  uint32_t adc_count_;
+  bool adc_read_active_;
+  LinkedList<uint32_t> allocations_;
+  LinkedList<uint32_t> aligned_allocations_;
 
-  Node() : BaseNode() {}
+  Node() : BaseNode(), dmaBuffer_(NULL),
+           adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
+           adc_count_(0), adc_read_active_(false) {
+    pinMode(LED_BUILTIN, OUTPUT);
+  }
 
-  UInt8Array get_buffer() { return UInt8Array(sizeof(buffer_), buffer_); }
+  UInt8Array get_buffer() { return UInt8Array_init(sizeof(buffer_), buffer_); }
   /* This is a required method to provide a temporary buffer to the
    * `BaseNode...` classes. */
 
@@ -61,6 +100,71 @@ public:
    * [2]: https://github.com/wheeler-microfluidics/base_node_rpc
    */
 
+  UInt8Array dma_tcd() {
+    /* Return serialized "Transfer control descriptor" of DMA channel. */
+    UInt8Array result = get_buffer();
+    if (dmaBuffer_ == NULL) {
+      result.length = 0;
+      return result;
+    }
+    typedef typename DMABaseClass::TCD_t tcd_t;
+    tcd_t &tcd = *reinterpret_cast<tcd_t *>(result.data);
+    result.length = sizeof(tcd_t);
+    tcd = *(dmaBuffer_->dmaChannel->TCD);
+    return result;
+  }
+  bool dma_start(uint32_t buffer_size) {
+    const bool power_of_two = (buffer_size &&
+                               !(buffer_size & (buffer_size - 1)));
+    if ((buffer_size > ADC_BUFFER_SIZE) || !power_of_two) { return false; }
+    dma_stop();
+    dmaBuffer_ = new RingBufferDMA(teensy_minimal_rpc::adc_buffer,
+                                   buffer_size, ADC_0);
+    dmaBuffer_->start();
+    return true;
+  }
+  void dma_stop() {
+    if (dmaBuffer_ != NULL) { delete dmaBuffer_; }
+  }
+  int16_t dma_read() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->read(); }
+  bool dma_full() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isFull(); }
+  bool dma_empty() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isEmpty(); }
+  uint32_t dma_available() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->available(); }
+
+  UInt16Array adc_buffer() {
+    UInt8Array byte_buffer = get_buffer();
+    UInt16Array result;
+    result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
+    result.length = dmaBuffer_->b_size;
+
+    uint16_t i = 0;
+    for (i = 0; i < dmaBuffer_->b_size; i++) {
+      result.data[i] = dmaBuffer_->p_elems[i];
+    }
+    return result;
+  }
+
+  UInt16Array adc_read() {
+    adc_read_active_ = true;
+    UInt8Array byte_buffer = get_buffer();
+    UInt16Array result;
+    result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
+    //result.length = dmaBuffer_->available();
+    result.length = dmaBuffer_->available() + (sizeof(uint32_t) /
+                                               sizeof(uint16_t));
+    uint32_t &adc_count = *(reinterpret_cast<uint32_t *>(result.data));
+    adc_count = adc_count_;
+    adc_count_ = 0;
+
+    uint16_t i = 0;
+    for (i = 0; i < result.length; i++) {
+      //result.data[i] = dmaBuffer_->read();
+      result.data[i + 2] = dmaBuffer_->read();
+    }
+    adc_read_active_ = false;
+    return result;
+  }
+
   /////////////// METHODS TO SET/GET SETTINGS OF THE ADC ////////////////////
 
   //! Set the voltage reference you prefer, default is 3.3 V (VCC)
@@ -82,11 +186,56 @@ public:
   }
 
   void on_tick() {
-    digitalWriteFast(13, !digitalReadFast(13));
+    if (adc_read_active_) return;
+    uint8_t channel;
+    switch(adc_count_ & 0x01) {
+      case(0): channel = A0; break;
+      case(1): channel = A1; break;
+      //case(2): channel = A2;
+      //case(3): channel = A3;
+      default: channel = A0;
+    }
+    adc_->startSingleRead(channel, ADC_0);
+  }
+
+  uint32_t V__SYST_CVR() { return SYST_CVR; }
+  uint32_t V__SCB_ICSR() { return SCB_ICSR; }
+  uint32_t D__F_CPU() { return F_CPU; }
+  uint32_t D__F_BUS() { return F_BUS; }
+
+  void on_adc_done() {
+    if (adc_read_active_) return;
+    adc_count_++;
+    //adc_tick_tock_ = !adc_tick_tock_;
+    //digitalWriteFast(LED_BUILTIN, adc_tick_tock_);
+    //adc_SYST_CVR_prev_ = adc_SYST_CVR_;
+    //adc_millis_ = millis();
+    //adc_SYST_CVR_ = SYST_CVR;
+  }
+
+  float adc_timestamp_us() const {
+    return compute_timestamp_us(adc_SYST_CVR_, adc_millis_);
+  }
+  float compute_timestamp_us(uint32_t _SYST_CVR, uint32_t _millis) const {
+    uint32_t current = ((F_CPU / 1000) - 1) - _SYST_CVR;
+#if defined(KINETISL) && F_CPU == 48000000
+    return _millis * 1000 + ((current * (uint32_t)87381) >> 22);
+#elif defined(KINETISL) && F_CPU == 24000000
+    return _millis * 1000 + ((current * (uint32_t)174763) >> 22);
+#endif
+    return 1000 * (_millis + current * (1000. / F_CPU));
+  }
+
+  float adc_period_us() const {
+    uint32_t _SYST_CVR = ((adc_SYST_CVR_ < adc_SYST_CVR_prev_)
+                          ? adc_SYST_CVR_ + 1000
+                          : adc_SYST_CVR_);
+    return (compute_timestamp_us(_SYST_CVR, 0) -
+            compute_timestamp_us(adc_SYST_CVR_prev_, 0));
   }
 
   //! Change the resolution of the measurement.
-  /*!
+  /*
   *  \param bits is the number of bits of resolution.
   *  For single-ended measurements: 8, 10, 12 or 16 bits.
   *  For differential measurements: 9, 11, 13 or 16 bits.
@@ -151,7 +300,7 @@ public:
     float a = 1e6;
     float b = 1e7;
     uint32_t start = micros();
-    for (int i = 0; i < N; i++) {
+    for (uint32_t i = 0; i < N; i++) {
       a /= b;
     }
     return (micros() - start);
@@ -161,7 +310,7 @@ public:
     uint32_t a = 1e6;
     uint32_t b = 1e7;
     uint32_t start = micros();
-    for (int i = 0; i < N; i++) {
+    for (uint32_t i = 0; i < N; i++) {
       a /= b;
     }
     return (micros() - start);
@@ -507,6 +656,122 @@ public:
     adc_->stopSynchronizedContinuous();
   }
 #endif
+
+  uint16_t analog_input_to_digital_pin(uint16_t pin) { return analogInputToDigitalPin(pin); }
+  uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
+  uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
+
+  UInt8Array read_adc_registers(uint8_t adc_num) {
+    return teensy::adc::serialize_registers(adc_num, get_buffer());
+  }
+  int8_t update_adc_registers(uint8_t adc_num, UInt8Array serialized_adc_msg) {
+    return teensy::adc::update_registers(adc_num, serialized_adc_msg);
+  }
+
+  UInt8Array read_pit_registers() {
+    return teensy::pit::serialize_registers(get_buffer());
+  }
+  int8_t update_pit_registers(UInt8Array serialized_pit_msg) {
+    return teensy::pit::update_registers(serialized_pit_msg);
+  }
+  UInt8Array read_pit_timer_config(uint8_t timer_index) {
+    return teensy::pit::serialize_timer_config(timer_index, get_buffer());
+  }
+  int8_t update_pit_timer_config(uint32_t index,
+                                 UInt8Array serialized_config) {
+    return teensy::pit::update_timer_config(index, serialized_config);
+  }
+
+  uint16_t dma_channel_count() { return DMA_NUM_CHANNELS; }
+  UInt8Array read_dma_TCD(uint8_t channel_num) {
+    return teensy::dma::serialize_TCD(channel_num, get_buffer());
+  }
+  void reset_dma_TCD(uint8_t channel_num) {
+    teensy::dma::reset_TCD(channel_num);
+  }
+  int8_t update_dma_TCD(uint8_t channel_num, UInt8Array serialized_tcd) {
+    return teensy::dma::update_TCD(channel_num, serialized_tcd);
+  }
+  UInt8Array read_dma_priority(uint8_t channel_num) {
+    return teensy::dma::serialize_dchpri(channel_num, get_buffer());
+  }
+  UInt8Array read_dma_registers() {
+    return teensy::dma::serialize_registers(get_buffer());
+  }
+  int8_t update_dma_registers(UInt8Array serialized_dma_msg) {
+    return teensy::dma::update_registers(serialized_dma_msg);
+  }
+
+  UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
+  UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
+  int8_t update_sim_SCGC6(UInt8Array serialized_scgc6) {
+    return teensy::sim::update_SCGC6(serialized_scgc6);
+  }
+  int8_t update_sim_SCGC7(UInt8Array serialized_scgc7) {
+    return teensy::sim::update_SCGC7(serialized_scgc7);
+  }
+
+  void free_all() {
+    while (allocations_.size() > 0) { free((void *)allocations_.shift()); }
+    while (aligned_allocations_.size() > 0) {
+      aligned_free((void *)aligned_allocations_.shift());
+    }
+  }
+  uint32_t mem_alloc(uint32_t size) {
+    uint32_t address = (uint32_t)malloc(size);
+    // Save to list of allocations for memory management.
+    allocations_.add(address);
+    return address;
+  }
+  void mem_free(uint32_t address) {
+    for (int i = 0; i < allocations_.size(); i++) {
+      if (allocations_.get(i) == address) { allocations_.remove(i); }
+    }
+    free((void *)address);
+  }
+  uint32_t mem_aligned_alloc(uint32_t alignment, uint32_t size) {
+    uint32_t address = (uint32_t)aligned_malloc(alignment, size);
+    // Save to list of allocations for memory management.
+    aligned_allocations_.add(address);
+    return address;
+  }
+  void mem_aligned_free(uint32_t address) {
+    for (int i = 0; i < aligned_allocations_.size(); i++) {
+      if (aligned_allocations_.get(i) == address) {
+        aligned_allocations_.remove(i);
+      }
+    }
+    aligned_free((void *)address);
+  }
+  uint32_t mem_aligned_alloc_and_set(uint32_t alignment, UInt8Array data) {
+    // Allocate aligned memory.
+    const uint32_t address = mem_aligned_alloc(alignment, data.length);
+    if (!address) { return 0; }
+    // Copy data to allocated memory.
+    mem_cpy_host_to_device(address, data);
+    return address;
+  }
+  void mem_cpy_host_to_device(uint32_t address, UInt8Array data) {
+    memcpy((uint8_t *)address, data.data, data.length);
+  }
+  UInt8Array mem_cpy_device_to_host(uint32_t address, uint32_t size) {
+    UInt8Array output;
+    output.length = size;
+    output.data = (uint8_t *)address;
+    return output;
+  }
+  void mem_fill_uint8(uint32_t address, uint8_t value, uint32_t size) {
+    mem_fill((uint8_t *)address, value, size);
+  }
+  void mem_fill_uint16(uint32_t address, uint16_t value, uint32_t size) {
+    mem_fill((uint16_t *)address, value, size);
+  }
+  void mem_fill_uint32(uint32_t address, uint32_t value, uint32_t size) {
+    mem_fill((uint32_t *)address, value, size);
+  }
+  void mem_fill_float(uint32_t address, float value, uint32_t size) {
+    mem_fill((float *)address, value, size);
+  }
 };
 
 }  // namespace teensy_minimal_rpc

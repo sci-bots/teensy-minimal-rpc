@@ -1,0 +1,173 @@
+package teensy._3_1.dma;
+
+
+message R_TCD_ATTR {
+  enum E_SIZE {
+    _8_BIT   = 0;
+    _16_BIT  = 1;
+    _32_BIT  = 2;
+    _16_BYTE = 4;
+  }
+  optional uint32 SMOD  = 1; // Source Address Modulo.
+  optional E_SIZE SSIZE = 2; // Source data transfer size
+  optional uint32 DMOD  = 3; // Destination Address Modulo
+  optional E_SIZE DSIZE = 4; // Destination data transfer size
+}
+
+
+message R_TCD_NBYTES_MLOFFNO {
+  optional bool SMLOE    = 1; // Source Minor Loop Offset Enable
+  optional bool DMLOE    = 2; // Destination Minor Loop Offset enable
+  optional uint32 NBYTES = 3; // Minor Byte Transfer Count
+}
+
+
+message R_TCD_NBYTES_MLOFFYES {
+  optional bool SMLOE    = 1; // Source Minor Loop Offset Enable
+  optional bool DMLOE    = 2; // Destination Minor Loop Offset enable
+  optional uint32 MLOFF  = 3; // Minor Loop Offset
+  optional uint32 NBYTES = 4; // Minor Byte Transfer Count
+}
+
+
+message R_TCD_ITER_ELINKYES {
+  optional bool ELINK    = 1; // Enable channel-to-channel linking on minor-loop complete
+  optional uint32 LINKCH = 2; // Link Channel Number
+  optional uint32 ITER   = 3; // Current Major Iteration Count
+}
+
+
+message R_TCD_ITER_ELINKNO {
+  optional bool ELINK   = 1; // Enable channel-to-channel linking on minor-loop complete
+  optional uint32 ITER  = 2; // Current Major Iteration Count
+}
+
+
+message R_TCD_CSR {
+  enum E_BWC {
+    NO_STALLS      = 0;
+    STALL_4_CYCLES = 2;
+    STALL_8_CYCLES = 3;
+  }
+  optional E_BWC BWC          = 1; // Bandwidth Control
+  optional uint32 MAJORLINKCH = 2; // Link Channel Number
+  optional bool DONE          = 3; // Channel Done
+  optional bool ACTIVE        = 4; // Channel Active
+  optional bool MAJORELINK    = 5; // Enable channel-to-channel linking on major loop complete
+  optional bool ESG           = 6; // Enable Scatter/Gather Processing
+  optional bool DREQ          = 7; // Disable Request
+  optional bool INTHALF       = 8; // Enable an interrupt when major counter is half complete.
+  optional bool INTMAJOR      = 9; // Enable an interrupt when major iteration count completes
+  optional bool START         = 10; // Channel Start
+}
+
+
+message TCD {
+  // (32 bits) TCD Source Address 21.3.17/415
+  optional uint32 SADDR           = 1;
+  // (16 bits) TCD Signed Source Address Offset 21.3.18/415
+  optional sint32 SOFF            = 2;
+  // (16 bits) TCD Transfer Attributes 21.3.19/416
+  optional R_TCD_ATTR ATTR          = 3;
+  // (32 bits) TCD Minor Byte Count (Minor Loop Disabled) 21.3.20/417
+  optional uint32 NBYTES_MLNO     = 4;
+  // (32 bits) TCD Signed Minor Loop Offset (Minor Loop Enabled and Offset Disabled) 21.3.21/417
+  optional R_TCD_NBYTES_MLOFFNO NBYTES_MLOFFNO  = 5;
+  // (32 bits) TCD Signed Minor Loop Offset (Minor Loop and Offset Enabled) 21.3.22/418
+  optional R_TCD_NBYTES_MLOFFYES NBYTES_MLOFFYES = 6;
+  // (32 bits) TCD Last Source Address Adjustment 21.3.23/420
+  optional sint32 SLAST           = 7;
+  // (32 bits) TCD Destination Address 21.3.24/420
+  optional uint32 DADDR           = 8;
+  // (16 bits) TCD Signed Destination Address Offset 21.3.25/421
+  optional sint32 DOFF            = 9;
+  // (16 bits) TCD Current Minor Loop Link, Major Loop Count (Channel Linking Enabled) 21.3.26/421
+  optional R_TCD_ITER_ELINKYES CITER_ELINKYES  = 10;
+  // (16 bits) 21.3.27/422
+  optional R_TCD_ITER_ELINKNO CITER_ELINKNO   = 11;
+  // (32 bits) TCD Last Destination Address Adjustment/Scatter Gather Address 21.3.28/423
+  optional sint32 DLASTSGA        = 12;
+  // (16 bits) TCD Control and Status 21.3.29/424
+  optional R_TCD_CSR CSR             = 13;
+  // (16 bits) TCD Beginning Minor Loop Link, Major Loop Count (Channel Linking Enabled) 21.3.30/426
+  optional R_TCD_ITER_ELINKYES BITER_ELINKYES  = 14;
+  // (16 bits) TCD Beginning Minor Loop Link, Major Loop Count (Channel Linking Disabled) 21.3.31/427
+  optional R_TCD_ITER_ELINKNO BITER_ELINKNO   = 15;
+}
+
+
+message DCHPRI {
+  // (8 bits) Channel n Priority Register 21.3.16/414
+  optional bool ECP     = 1;  // Enable Channel Preemption
+  optional bool DPA     = 2;  // Disable Preempt Ability
+  optional uint32 CHPRI = 3;  // Channel n Arbitration Priority
+}
+
+
+message R_CR {
+  optional bool CX   = 1; // Cancel Transfer
+  optional bool ECX  = 2; // Error Cancel Transfer
+  optional bool EMLM = 3; // Enable Minor Loop Mapping
+  optional bool CLM  = 4; // Continuous Link Mode
+  optional bool HALT = 5; // Halt DMA Operations
+  optional bool HOE  = 6; // Halt On Error
+  optional bool ERCA = 7; // Enable Round Robin Channel Arbitration
+  optional bool EDBG = 8; // Enable Debug
+}
+
+
+message MUX_CHCFG {
+  optional bool ENBL = 1; // DMA Channel Enable (20.3.1/366)
+  optional bool TRIG = 2; // DMA Channel Trigger Enable (20.3.1/366)
+  optional uint32 SOURCE = 3; // DMA Channel Source (Slot) (20.3.1/366)
+}
+
+
+message R_ES {
+  optional bool VLD      = 1; // Logical OR of all ERR status bits
+  optional bool ECX      = 2; // Transfer Cancelled
+  optional bool CPE      = 3; // Channel Priority Error
+  optional uint32 ERRCHN = 4; // Error Channel Number or Cancelled Channel Number
+  optional bool SAE      = 5; // Source Address Error
+  optional bool SOE      = 6; // Source Offset Error
+  optional bool DAE      = 7; // Destination Address Error
+  optional bool DOE      = 8; // Destination Offset Error
+  optional bool NCE      = 9; // NBYTES/CITER Configuration Error
+  optional bool SGE      = 10; // Scatter/Gather Configuration Error
+  optional bool SBE      = 11; // Source Bus Error
+  optional bool DBE      = 12; // Destination Bus Error
+}
+
+
+message Registers {
+  // (32 bits) Control Register 21.3.1/391
+  optional R_CR CR                   = 1;
+  // (32 bits) Error Status Register 21.3.2/392
+  optional R_ES ES                   = 2;
+  // (32 bits) Enable Request Register 21.3.3/394
+  optional uint32 ERQ                  = 3;
+  // (32 bits) Enable Error Interrupt Register 21.3.4/397
+  optional uint32 EEI                  = 4;
+  // (8 bits) Clear Enable Error Interrupt Register 21.3.5/399
+  optional uint32 CEEI                 = 5;
+  // (8 bits) Set Enable Error Interrupt Register 21.3.6/400
+  optional uint32 SEEI                 = 6;
+  // (8 bits) Clear Enable Request Register 21.3.7/401
+  optional uint32 CERQ                 = 7;
+  // (8 bits) Set Enable Request Register 21.3.8/402
+  optional uint32 SERQ                 = 8;
+  // (8 bits) Clear DONE Status Bit Register 21.3.9/403
+  optional uint32 CDNE                 = 9;
+  // (8 bits) Set START Bit Register 21.3.10/404
+  optional uint32 SSRT                 = 10;
+  // (8 bits) Clear Error Register 21.3.11/405
+  optional uint32 CERR                 = 11;
+  // (8 bits) Clear Interrupt Request Register 21.3.12/406
+  optional uint32 CINT                 = 12;
+  // (32 bits) Interrupt Request Register 21.3.13/406
+  optional uint32 INT                  = 13;
+  // (32 bits) Error Register 21.3.14/409
+  optional uint32 ERR                  = 14;
+  // (32 bits) Hardware Request Status Register 21.3.15/411
+  optional uint32 HRS                  = 15;
+}

@@ -1,0 +1,50 @@
+package teensy._3_1.sim;
+
+
+message R_SCGC6 {
+  // System Clock Gating Control Register 6 (12.2.13/256)
+  optional bool RTC      = 1;  // RTC Access Control
+  optional bool ADC0     = 2;  // ADC0 Clock Gate Control
+  optional bool FTM1     = 3;  // FTM1 Clock Gate Control
+  optional bool FTM0     = 4;  // FTM0 Clock Gate Control
+  optional bool PIT      = 5;  // PIT Clock Gate Control
+  optional bool PDB      = 6;  // PDB Clock Gate Control
+  optional bool USBDCD   = 7;  // USB DCD Clock Gate Control
+  optional bool CRC      = 8;  // CRC Clock Gate Control
+  optional bool I2S      = 9;  // I2S Clock Gate Control
+  optional bool SPI1     = 10;  // SPI1 Clock Gate Control
+  optional bool SPI0     = 11;  // SPI0 Clock Gate Control
+  optional bool FLEXCAN0 = 12;  // FlexCAN0 Clock Gate Control
+  optional bool DMAMUX   = 13;  // DMA Mux Clock Gate Control
+  optional bool FTFL     = 14;  // Flash Memory Clock Gate Control
+}
+
+message R_SCGC7 {
+  // System Clock Gating Control Register 7 (12.2.14/259)
+  optional bool DMA = 1;  // DMA Clock Gate Control
+}
+
+message Registers {
+  optional uint32 SOPT1    = 1;  // System Options Register 1 (12.2.1/237)
+  optional uint32 SOPT1CFG = 2;  // SOPT1 Configuration Register (12.2.2/239)
+  optional uint32 SOPT2    = 3;  // System Options Register 2 (12.2.3/240)
+  optional uint32 SOPT4    = 4;  // System Options Register 4 (12.2.4/242)
+  optional uint32 SOPT5    = 5;  // System Options Register 5 (12.2.5/245)
+  optional uint32 SOPT7    = 6;  // System Options Register 7 (12.2.6/246)
+  optional uint32 SDID     = 7;  // System Device Identification Register (12.2.7/248)
+  optional uint32 SCGC1    = 8;  // System Clock Gating Control Register 1 (12.2.8/249)
+  optional uint32 SCGC2    = 9;  // System Clock Gating Control Register 2 (12.2.9/250)
+  optional uint32 SCGC3    = 10;  // System Clock Gating Control Register 3 (12.2.10/251)
+  optional uint32 SCGC4    = 11;  // System Clock Gating Control Register 4 (12.2.11/252)
+  optional uint32 SCGC5    = 12;  // System Clock Gating Control Register 5 (12.2.12/254)
+  optional R_SCGC6 SCGC6   = 13;  // System Clock Gating Control Register 6 (12.2.13/256)
+  optional R_SCGC7 SCGC7   = 14;  // System Clock Gating Control Register 7 (12.2.14/259)
+  optional uint32 CLKDIV1  = 15;  // System Clock Divider Register 1 (12.2.15/259)
+  optional uint32 CLKDIV2  = 16;  // System Clock Divider Register 2 (12.2.16/261)
+  optional uint32 FCFG1    = 17;  // Flash Configuration Register 1 (12.2.17/262)
+  optional uint32 FCFG2    = 18;  // Flash Configuration Register 2 (12.2.18/264)
+  optional uint32 UIDH     = 19;  // Unique Identification Register High (12.2.19/265)
+  optional uint32 UIDMH    = 20;  // Unique Identification Register Mid-High (12.2.20/266)
+  optional uint32 UIDML    = 21;  // Unique Identification Register Mid Low (12.2.21/266)
+  optional uint32 UIDL     = 22;  // Unique Identification Register Low (12.2.22/267)
+}

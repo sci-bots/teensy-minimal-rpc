@@ -1,0 +1,140 @@
+package teensy._3_1.adc;
+
+message R_SC1 {
+  /* See page 653. */
+  optional bool COCO = 1;  // Conversion complete flag
+  optional bool AIEN = 2;  // Interrupt enable
+  optional bool DIFF = 3;  // Differential mode enable
+  optional uint32 ADCH = 4;  // Input channel select
+}
+
+message R_CFG1 {
+  /* See page 656. */
+  optional bool ADLPC = 1;  // Low-power configuration
+  enum E_ADIV {
+    ONE = 0;
+    TWO = 1;
+    FOUR = 2;
+    EIGHT = 3;
+  }
+  optional E_ADIV ADIV = 2;  // Clock divide select
+  enum E_ADLSMP {
+    SHORT = 0;
+    LONG = 1;
+  }
+  optional E_ADLSMP ADLSMP = 3;  // Sample time configuration
+  enum E_MODE {
+    _8_BIT = 0;
+    _12_BIT = 1;
+    _10_BIT = 2;
+    _16_BIT = 3;
+  }
+  optional E_MODE MODE = 4;  // Conversion mode selection
+  enum E_ADICLK {
+    BUS_CLOCK = 0;  // Bus clock
+    BUS_CLOCK_DIV_2 = 1;  // Bus clock/2
+    ALTERNATE_CLOCK = 2;  // Alternate clock (ALTCLK)
+    ASYNCHRONOUS_CLOCK = 3;  // Asynchronous clock (ADACK)
+  }
+  optional E_ADICLK ADICLK = 5;  // Input clock select
+}
+
+message R_CFG2 {
+  /* See page 658. */
+  enum E_MUXSEL {
+    A = 0;
+    B = 1;
+  }
+  optional E_MUXSEL MUXSEL = 1;
+  optional bool ADACKEN = 2;  // Asynchronous clock output enable
+  optional bool ADHSC = 3;  // High-speed configuration
+  enum E_ADLSTS {
+    ADD_20_ADCK_CYCLES = 0;
+    ADD_12_ADCK_CYCLES = 1;
+    ADD_6_ADCK_CYCLES = 2;
+    ADD_2_ADCK_CYCLES = 3;
+  }
+  optional E_ADLSTS ADLSTS = 4;  // Long sample time select
+}
+
+message R_SC2 {
+  /* See page 661. */
+  optional bool ADACT = 1;  // Conversion active
+  enum E_ADTRG {
+    SOFTWARE = 0;
+    HARDWARE = 1;
+  }
+  optional E_ADTRG ADTRG = 2;  // Conversion trigger select
+  optional bool ACFE = 3;  // Compare Function Enable
+  optional bool ACFGT = 4;  // Compare function greater than enable
+  optional bool ACREN = 5;  // Compare function range enable
+  optional bool DMAEN = 6;  // DMA enable
+  enum E_REFSEL {
+    DEFAULT = 0;
+    ALTERNATE = 1;
+  }
+  optional E_REFSEL REFSEL = 7;  // Voltage reference selection
+}
+
+message R_SC3 {
+  /* See page 663. */
+  optional bool CAL = 1;  // Calibration
+  optional bool CALF = 2;  // Calibration failed flag
+  optional bool ADCO = 3;  // Continuous conversion enable
+  optional bool AVGE = 4;  // Hardware average enable
+  enum E_AVGS {
+    _4 = 0;
+    _8 = 1;
+    _16 = 2;
+    _32 = 3;
+  }
+  optional E_AVGS AVGS = 5;  // Hardware average select (samples averaged)
+}
+
+message R_PGA {
+  /* See page 670. */
+  optional bool PGAEN = 1;  // PGA enable
+  optional bool PGALPB = 2;  // PGA low-power mode control
+  enum E_PGAG {
+    _1 = 0;
+    _2 = 1;
+    _4 = 2;
+    _8 = 3;
+    _16 = 4;
+    _32 = 5;
+    _64 = 6;
+  }
+  optional E_PGAG PGAG = 3;  // PGA Gain setting, $PGA~gain = 2^{PGAG}$
+}
+
+message Registers {
+  optional R_SC1 SC1A  = 1;
+  optional R_SC1 SC1B  = 2;
+  optional R_CFG1 CFG1 = 3;
+  optional R_CFG2 CFG2 = 4;
+  optional uint32 RA   = 5;  // Data result register
+  optional uint32 RB   = 6;  // Data result register
+  optional uint32 CV1   = 7;  // Compare value register
+  optional uint32 CV2   = 8;  // Compare value register
+  optional R_SC2 SC2   = 9;
+  optional R_SC3 SC3   = 10;
+
+  optional sint32 OFS   = 11;  // Offset correction register
+  optional fixed32 PG = 12;  // Plus-side gain register
+  optional fixed32 MG     = 13;  // Minus-side gain register
+  optional uint32 CLPD = 14;  // Plus-Side General Calibration Value Registers
+  optional uint32 CLPS = 15;
+  optional uint32 CLP4 = 16;
+  optional uint32 CLP3 = 17;
+  optional uint32 CLP2 = 18;
+  optional uint32 CLP1 = 19;
+  optional uint32 CLP0 = 20;
+  optional R_PGA PGA   = 21;  // Programmable gain amplifier register (pg. 675)
+  optional uint32 CLMD = 22;  // Minus-Side General Calibration Value Registers
+  optional uint32 CLMS = 23;
+  optional uint32 CLM4 = 24;
+  optional uint32 CLM3 = 25;
+  optional uint32 CLM2 = 26;
+  optional uint32 CLM1 = 27;
+  optional uint32 CLM0 = 28;
+}
