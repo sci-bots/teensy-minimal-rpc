@@ -13,13 +13,11 @@
 #include "BaseNodeRpc.h"  // Check for changes (may have removed some include statements...
 #include "TeensyMinimalRpc.h"
 #include "ADC.h"
-#include <IntervalTimer.h>
 #include "Node.h"
 
 
 teensy_minimal_rpc::Node node_obj;
 teensy_minimal_rpc::CommandProcessor<teensy_minimal_rpc::Node> command_processor(node_obj);
-IntervalTimer timer0; // timer
 
 // when the measurement finishes, this will be called
 // first: see which pin finished and then save the measurement into the correct buffer
@@ -43,7 +41,86 @@ void loop() {
   if (node_obj.serial_handler_.packet_ready()) {
     node_obj.serial_handler_.process_packet(command_processor);
   }
+  node_obj.loop();
 }
 
-
-void timer0_callback(void) { node_obj.on_tick(); }
+void dma_ch0_isr(void) {
+  DMA_CINT = 0;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 0;
+}
+void dma_ch1_isr(void) {
+  DMA_CINT = 1;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 1;
+}
+void dma_ch2_isr(void) {
+  DMA_CINT = 2;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 2;
+}
+void dma_ch3_isr(void) {
+  DMA_CINT = 3;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 3;
+}
+void dma_ch4_isr(void) {
+  DMA_CINT = 4;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 4;
+}
+void dma_ch5_isr(void) {
+  DMA_CINT = 5;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 5;
+}
+void dma_ch6_isr(void) {
+  DMA_CINT = 6;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 6;
+}
+void dma_ch7_isr(void) {
+  DMA_CINT = 7;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 7;
+}
+void dma_ch8_isr(void) {
+  DMA_CINT = 8;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 8;
+}
+void dma_ch9_isr(void) {
+  DMA_CINT = 9;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 9;
+}
+void dma_ch10_isr(void) {
+  DMA_CINT = 10;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 10;
+}
+void dma_ch11_isr(void) {
+  DMA_CINT = 11;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 11;
+}
+void dma_ch12_isr(void) {
+  DMA_CINT = 12;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 12;
+}
+void dma_ch13_isr(void) {
+  DMA_CINT = 13;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 13;
+}
+void dma_ch14_isr(void) {
+  DMA_CINT = 14;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 14;
+}
+void dma_ch15_isr(void) {
+  DMA_CINT = 15;
+  PDB0_SC = 0;  // Stop PDB timer.
+  node_obj.dma_channel_done_ = 15;
+}

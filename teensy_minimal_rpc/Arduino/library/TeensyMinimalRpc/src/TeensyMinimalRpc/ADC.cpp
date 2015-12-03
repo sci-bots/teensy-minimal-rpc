@@ -133,15 +133,6 @@ namespace adc {
       *(reinterpret_cast<volatile AdcRegister_t *>(&ADC0_SC1A) + adc_num);
     // Cast buffer as ADC_REGISTERS Protocol Buffer message.
 
-    if (adc_msg.has_SC1A) {
-      uint32_t SC1A = adc.SC1A;
-
-      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, AIEN, SC1A)
-      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, COCO, SC1A)
-      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, DIFF, SC1A)
-      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC1A, 5, 0, ADCH, SC1A)
-    }
-
     if (adc_msg.has_SC1B) {
       uint32_t SC1B = adc.SC1B;
 
@@ -236,8 +227,20 @@ namespace adc {
     if (adc_msg.has_MG) { adc.MG = adc_msg.MG; }
     if (adc_msg.has_PG) { adc.PG = adc_msg.PG; }
 
-    //return 0;
-    return adc_msg.CFG2.ADLSTS;
+    if (adc_msg.has_SC1A) {
+      uint32_t SC1A = adc.SC1A;
+
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, AIEN, SC1A)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, COCO, SC1A)
+      PB_UPDATE_TEENSY_REG_BIT(adc_msg.SC1A, ADC_SC1, DIFF, SC1A)
+      PB_UPDATE_TEENSY_REG_BITS(adc_msg.SC1A, 5, 0, ADCH, SC1A)
+
+      __disable_irq();
+      adc.SC1A = SC1A;
+      __enable_irq();
+    }
+
+    return 0;
   }
 }  // namespace adc
 }  // namespace teensy

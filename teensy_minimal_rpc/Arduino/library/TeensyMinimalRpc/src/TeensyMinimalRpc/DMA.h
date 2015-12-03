@@ -26,6 +26,9 @@ namespace dma {
   UInt8Array serialize_registers(UInt8Array buffer);
   int8_t update_registers(UInt8Array serialized_registers);
 
+  UInt8Array serialize_mux_chcfg(uint32_t channel_num, UInt8Array buffer);
+  int8_t update_mux_chcfg(uint32_t channel_num,
+                          UInt8Array serialized_mux_chcfg);
   UInt8Array serialize_dchpri(uint32_t channel_num, UInt8Array buffer);
 }  // namespace dma
 }  // namespace teensy

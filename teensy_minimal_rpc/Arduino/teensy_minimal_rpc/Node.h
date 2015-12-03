@@ -13,7 +13,6 @@
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
-#include <IntervalTimer.h>
 #include <RingBufferDMA.h>
 #include <DMAChannel.h>
 #include <TeensyMinimalRpc/ADC.h>  // Analog to digital converter
@@ -26,9 +25,22 @@
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
 
-extern IntervalTimer timer0; // timer
-void timer0_callback(void);
-
+extern void dma_ch0_isr(void);
+extern void dma_ch1_isr(void);
+extern void dma_ch2_isr(void);
+extern void dma_ch3_isr(void);
+extern void dma_ch4_isr(void);
+extern void dma_ch5_isr(void);
+extern void dma_ch6_isr(void);
+extern void dma_ch7_isr(void);
+extern void dma_ch8_isr(void);
+extern void dma_ch9_isr(void);
+extern void dma_ch10_isr(void);
+extern void dma_ch11_isr(void);
+extern void dma_ch12_isr(void);
+extern void dma_ch13_isr(void);
+extern void dma_ch14_isr(void);
+extern void dma_ch15_isr(void);
 
 namespace teensy_minimal_rpc {
 
@@ -67,13 +79,16 @@ public:
   uint32_t adc_millis_prev_;
   uint32_t adc_SYST_CVR_prev_;
   uint32_t adc_count_;
+  int8_t dma_channel_done_;
+  int8_t last_dma_channel_done_;
   bool adc_read_active_;
   LinkedList<uint32_t> allocations_;
   LinkedList<uint32_t> aligned_allocations_;
 
   Node() : BaseNode(), dmaBuffer_(NULL),
            adc_period_us_(0), adc_timestamp_us_(0), adc_tick_tock_(false),
-           adc_count_(0), adc_read_active_(false) {
+           adc_count_(0), dma_channel_done_(-1), last_dma_channel_done_(-1),
+           adc_read_active_(false) {
     pinMode(LED_BUILTIN, OUTPUT);
   }
 
@@ -99,7 +114,7 @@ public:
    * [1]: https://github.com/wheeler-microfluidics/arduino_rpc
    * [2]: https://github.com/wheeler-microfluidics/base_node_rpc
    */
-
+  float test(float a) { return 2 * a; }
   UInt8Array dma_tcd() {
     /* Return serialized "Transfer control descriptor" of DMA channel. */
     UInt8Array result = get_buffer();
@@ -177,13 +192,7 @@ public:
     adc_->setReference(type, adc_num);
   }
 
-  void start_timer(uint32_t period) {
-    timer0.begin(timer0_callback, period);
-  }
 
-  void stop_timer() {
-    timer0.end();
-  }
 
   void on_tick() {
     if (adc_read_active_) return;
@@ -701,6 +710,15 @@ public:
   int8_t update_dma_registers(UInt8Array serialized_dma_msg) {
     return teensy::dma::update_registers(serialized_dma_msg);
   }
+  UInt8Array read_dma_mux_chcfg(uint8_t channel_num) {
+    return teensy::dma::serialize_mux_chcfg(channel_num, get_buffer());
+  }
+  int8_t update_dma_mux_chcfg(uint8_t channel_num, UInt8Array serialized_mux) {
+    return teensy::dma::update_mux_chcfg(channel_num, serialized_mux);
+  }
+  void clear_dma_errors() {
+    DMA_CERR = DMA_CERR_CAEI;  // Clear All Error Indicators
+  }
 
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
   UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
@@ -772,6 +790,43 @@ public:
   void mem_fill_float(uint32_t address, float value, uint32_t size) {
     mem_fill((float *)address, value, size);
   }
+  void loop() {
+    if (dma_channel_done_ >= 0) {
+      // DMA channel has completed.
+      last_dma_channel_done_ = dma_channel_done_;
+      dma_channel_done_ = -1;
+    }
+  }
+  int8_t last_dma_channel_done() const { return last_dma_channel_done_; }
+  void attach_dma_interrupt(uint8_t dma_channel) {
+    void (*isr)(void);
+    switch(dma_channel) {
+      case 0: isr = &dma_ch0_isr; break;
+      case 1: isr = &dma_ch1_isr; break;
+      case 2: isr = &dma_ch2_isr; break;
+      case 3: isr = &dma_ch3_isr; break;
+      case 4: isr = &dma_ch4_isr; break;
+      case 5: isr = &dma_ch5_isr; break;
+      case 6: isr = &dma_ch6_isr; break;
+      case 7: isr = &dma_ch7_isr; break;
+      case 8: isr = &dma_ch8_isr; break;
+      case 9: isr = &dma_ch9_isr; break;
+      case 10: isr = &dma_ch10_isr; break;
+      case 11: isr = &dma_ch11_isr; break;
+      case 12: isr = &dma_ch12_isr; break;
+      case 13: isr = &dma_ch13_isr; break;
+      case 14: isr = &dma_ch14_isr; break;
+      case 15: isr = &dma_ch15_isr; break;
+      default: return;
+    }
+    _VectorsRam[dma_channel + IRQ_DMA_CH0 + 16] = isr;
+    NVIC_ENABLE_IRQ(IRQ_DMA_CH0 + dma_channel);
+  }
+
+  void detach_dma_interrupt(uint8_t dma_channel) {
+      NVIC_DISABLE_IRQ(IRQ_DMA_CH0 + dma_channel);
+  }
+
 };
 
 }  // namespace teensy_minimal_rpc
