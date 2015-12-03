@@ -6,6 +6,7 @@ RELEASE-VERSION
 */Arduino/*/Config.h
 setup.py
 paver-minilib.zip
+docs/build
 dist/*
 build/*
 */*_pb2.py
