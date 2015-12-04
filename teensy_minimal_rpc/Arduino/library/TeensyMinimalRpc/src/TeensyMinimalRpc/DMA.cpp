@@ -2,7 +2,7 @@
 
 namespace teensy {
 namespace dma {
-  UInt8Array serialize_TCD(uint8_t channel_num, UInt8Array buffer) {
+  teensy__3_1_dma_TCD TCD_to_protobuf(uint8_t channel_num) {
     // __NB__ Transfer control descriptor (TCD) range starts at address of
     // `DMA_TCD0_SADDR`.
     volatile DMABaseClass::TCD_t &tcd =
@@ -105,6 +105,11 @@ namespace dma {
       PB_SET_TEENSY_REG_BITS_FROM_VAL(result.BITER_ELINKNO, 15, 0, ITER, tcd.BITER_ELINKNO, uint32_t)
     }
 
+    return result;
+  }
+
+  UInt8Array serialize_TCD(uint8_t channel_num, UInt8Array buffer) {
+    teensy__3_1_dma_TCD result = TCD_to_protobuf(channel_num);
     UInt8Array output =
       nanopb::serialize_to_array(result, teensy__3_1_dma_TCD_fields,
                                  buffer);
@@ -296,15 +301,7 @@ namespace dma {
     return output;
   }
 
-  int8_t update_registers(UInt8Array serialized_registers) {
-    // Create empty DMA Registers Protocol Buffer message.
-    teensy__3_1_dma_Registers dma_msg = teensy__3_1_dma_Registers_init_default;
-
-    bool ok = nanopb::decode_from_array(serialized_registers,
-                                        teensy__3_1_dma_Registers_fields,
-                                        dma_msg);
-    if (!ok) { return -1; }
-
+  int8_t update_registers(teensy__3_1_dma_Registers const &dma_msg) {
     if (dma_msg.has_CR) {
       uint32_t CR = DMA_CR;
 
@@ -370,11 +367,22 @@ namespace dma {
     return 0;
   }
 
+  int8_t update_registers(UInt8Array serialized_registers) {
+    // Create empty DMA Registers Protocol Buffer message.
+    teensy__3_1_dma_Registers dma_msg = teensy__3_1_dma_Registers_init_default;
+
+    bool ok = nanopb::decode_from_array(serialized_registers,
+                                        teensy__3_1_dma_Registers_fields,
+                                        dma_msg);
+    if (!ok) { return -1; }
+    return update_registers(dma_msg);
+  }
+
   inline volatile uint8_t *channel_to_dchpri_addr(uint8_t channel_num) {
     return &DMA_DCHPRI3 + ((~channel_num) & 0x3) + (channel_num & 0xFC);
   }
 
-  UInt8Array serialize_dchpri(uint32_t channel_num, UInt8Array buffer) {
+  teensy__3_1_dma_DCHPRI dchpri_to_protobuf(uint32_t channel_num) {
     // (8 bits) Channel n Priority Register 21.3.16/414
     teensy__3_1_dma_DCHPRI result = teensy__3_1_dma_DCHPRI_init_default;
 
@@ -384,6 +392,11 @@ namespace dma {
     PB_SET_TEENSY_REG_BIT_FROM_VAL(result, DMA_DCHPRI, DPA, DCHPRI)  // Disable PreEmpt Ability
     PB_SET_TEENSY_REG_BITS_FROM_VAL(result, 4, 0, CHPRI, DCHPRI, uint32_t)  // Channel Arbitration Priority
 
+    return result;
+  }
+
+  UInt8Array serialize_dchpri(uint32_t channel_num, UInt8Array buffer) {
+    teensy__3_1_dma_DCHPRI result = dchpri_to_protobuf(channel_num);
     UInt8Array output =
       nanopb::serialize_to_array(result, teensy__3_1_dma_DCHPRI_fields,
                                  buffer);
@@ -411,7 +424,7 @@ namespace dma {
     return 0;
   }
 
-  UInt8Array serialize_mux_chcfg(uint32_t channel_num, UInt8Array buffer) {
+  teensy__3_1_dma_MUX_CHCFG mux_chcfg_to_protobuf(uint32_t channel_num) {
     // (8 bits) Channel Configuration register (DMAMUX_CHCFGn) (20.3.1/366)
     teensy__3_1_dma_MUX_CHCFG result = teensy__3_1_dma_MUX_CHCFG_init_default;
 
@@ -422,6 +435,11 @@ namespace dma {
     PB_SET_TEENSY_BIT_FROM_VAL(result, 6, TRIG, MUX_CHCFG)  // DMA Channel Trigger Enable (20.3.1/366)
     PB_SET_TEENSY_REG_BITS_FROM_VAL(result, 6, 0, SOURCE, MUX_CHCFG, uint32_t)  // DMA Channel Source (Slot) (20.3.1/366)
 
+    return result;
+  }
+
+  UInt8Array serialize_mux_chcfg(uint32_t channel_num, UInt8Array buffer) {
+    teensy__3_1_dma_MUX_CHCFG result = mux_chcfg_to_protobuf(channel_num);
     UInt8Array output =
       nanopb::serialize_to_array(result, teensy__3_1_dma_MUX_CHCFG_fields,
                                  buffer);
@@ -429,16 +447,7 @@ namespace dma {
   }
 
   int8_t update_mux_chcfg(uint32_t channel_num,
-                          UInt8Array serialized_mux_chcfg) {
-    // (8 bits) Channel Configuration register (DMAMUX_CHCFGn) (20.3.1/366)
-    teensy__3_1_dma_MUX_CHCFG mux_chcfg_msg =
-      teensy__3_1_dma_MUX_CHCFG_init_default;
-
-    bool ok = nanopb::decode_from_array(serialized_mux_chcfg,
-                                        teensy__3_1_dma_MUX_CHCFG_fields,
-                                        mux_chcfg_msg);
-    if (!ok) { return -1; }
-
+                          teensy__3_1_dma_MUX_CHCFG const &mux_chcfg_msg) {
     volatile uint8_t &MUX_CHCFG = *((volatile uint8_t *)&(DMAMUX0_CHCFG0) +
                                     channel_num);
     uint8_t mux_chcfg = MUX_CHCFG;
@@ -452,6 +461,19 @@ namespace dma {
     MUX_CHCFG = mux_chcfg;
 
     return 0;
+  }
+
+  int8_t update_mux_chcfg(uint32_t channel_num,
+                          UInt8Array serialized_mux_chcfg) {
+    // (8 bits) Channel Configuration register (DMAMUX_CHCFGn) (20.3.1/366)
+    teensy__3_1_dma_MUX_CHCFG mux_chcfg_msg =
+      teensy__3_1_dma_MUX_CHCFG_init_default;
+
+    bool ok = nanopb::decode_from_array(serialized_mux_chcfg,
+                                        teensy__3_1_dma_MUX_CHCFG_fields,
+                                        mux_chcfg_msg);
+    if (!ok) { return -1; }
+    return update_mux_chcfg(channel_num, mux_chcfg_msg);
   }
 }  // namespace dma
 }  // namespace teensy
