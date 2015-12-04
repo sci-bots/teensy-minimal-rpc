@@ -111,14 +111,7 @@ namespace dma {
     return output;
   }
 
-  int8_t update_TCD(uint8_t channel_num, UInt8Array tcd_data) {
-    // Create empty DMA Registers Protocol Buffer message.
-    teensy__3_1_dma_TCD tcd_new = teensy__3_1_dma_TCD_init_default;
-
-    bool ok = nanopb::decode_from_array(tcd_data, teensy__3_1_dma_TCD_fields,
-                                        tcd_new);
-    if (!ok) { return -1; }
-
+  int8_t update_TCD(uint8_t channel_num, teensy__3_1_dma_TCD const &tcd_new) {
     // __NB__ Transfer control descriptor (TCD) range starts at address of
     // `DMA_TCD0_SADDR`.
     volatile DMABaseClass::TCD_t &tcd =
@@ -244,8 +237,17 @@ namespace dma {
     return 0;
   }
 
-  UInt8Array serialize_registers(UInt8Array buffer) {
-    // Cast buffer as ADC_REGISTERS Protocol Buffer message.
+  int8_t update_TCD(uint8_t channel_num, UInt8Array tcd_data) {
+    // Create empty DMA Registers Protocol Buffer message.
+    teensy__3_1_dma_TCD tcd_new = teensy__3_1_dma_TCD_init_default;
+
+    bool ok = nanopb::decode_from_array(tcd_data, teensy__3_1_dma_TCD_fields,
+                                        tcd_new);
+    if (!ok) { return -1; }
+    return update_TCD(channel_num, tcd_new);
+  }
+
+  teensy__3_1_dma_Registers registers_to_protobuf() {
     teensy__3_1_dma_Registers result = teensy__3_1_dma_Registers_init_default;
 
     result.has_CR = true;
@@ -283,6 +285,11 @@ namespace dma {
     result.has_HRS = true; // (32 bits) Hardware Request Status Register 21.3.15/411
     result.HRS = (uint32_t)DMA_HRS;
 
+    return result;
+  }
+
+  UInt8Array serialize_registers(UInt8Array buffer) {
+    teensy__3_1_dma_Registers result = registers_to_protobuf();
     UInt8Array output =
       nanopb::serialize_to_array(result, teensy__3_1_dma_Registers_fields,
                                  buffer);
