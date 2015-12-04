@@ -1,5 +1,6 @@
 from path_helpers import path
 try:
+    import arduino_helpers.hardware.teensy as teensy
     from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
                        SerialProxy as _SerialProxy)
 
@@ -179,6 +180,180 @@ try:
 
             state = State(**kwargs)
             return super(ProxyMixin, self).update_state(state)
+
+        def analog_reads(self, adc_channel, sample_count, resolution=None,
+                         average_count=1, sampling_rate_hz=None,
+                         differential=False, gain_power=0,
+                         adc_num=teensy.ADC_0):
+            '''
+            Read multiple samples from a single ADC channel, using the minimum
+            conversion rate for specified sampling parameters.
+
+            The reasoning behind selecting the minimum conversion rate is that
+            we expect it to lead to the lowest noise possible while still
+            matching the specified requirements.
+            **TODO** Should this be handled differently?
+
+            Parameters
+            ----------
+            adc_channel : string
+                ADC channel to measure (e.g., `'A0'`, `'PGA0'`, etc.).
+            sample_count : int
+                Number of samples to measure.
+            resolution : int
+                Bit resolution to sample at.  Must be one of: 8, 10, 12, 16.
+            average_count : int
+                Hardware average count.
+            sampling_rate_hz : int
+                Sampling rate.  If not specified, sampling rate will be based
+                on minimum conversion rate based on remaining ADC settings.
+            differential : bool
+                If `True`, use differential mode.  Otherwise, use single-ended
+                mode.
+            gain_power : int
+                When measuring a `'PGA*'` channel (also implies differential
+                mode), apply a gain of `2^gain_power` using the hardware
+                programmable amplifier gain.
+            adc_num : int
+                The ADC to use for the measurement (default is `teensy.ADC_0`).
+
+            Returns
+            -------
+            sampling_rate_hz : int
+                Number of samples per second.
+            adc_settings : pandas.Series
+                ADC settings used.
+            df_volts : pandas.DataFrame
+                Voltage readings (based on reference voltage and gain).
+            df_adc_results : pandas.DataFrame
+                Raw ADC values (range depends on resolution, i.e.,
+                `adc_settings['Bit-width']`).
+            '''
+            from .adc_sampler import AdcSampler, DEFAULT_ADC_CONFIGS
+            import teensy_minimal_rpc.ADC as ADC
+
+            # Select ADC settings to achieve minimum conversion rate for
+            # specified resolution, mode (i.e., single-ended or differential),
+            # and number of samples to average per conversion (i.e., average
+            # count).
+            bit_width = resolution
+
+            if 'PGA' in adc_channel:
+                differential = True
+
+            if differential:
+                if resolution < 16 and not (resolution & 0x01):
+                    # An even number of bits was specified for resolution in
+                    # differential mode. However, bit-widths are actually
+                    # increased by one bit, where the additional bit indicates
+                    # the sign of the result.
+                    bit_width += 1
+
+            elif gain_power > 0:
+                raise ValueError('Programmable gain amplification is only '
+                                 'valid in differential mode.')
+            mode = 'differential' if differential else 'single-ended'
+
+            # Build up a query mask based on specified options.
+            query = ((DEFAULT_ADC_CONFIGS.AverageNum == average_count)
+                    & (DEFAULT_ADC_CONFIGS.Mode == mode))
+            if resolution is not None:
+                query &= (DEFAULT_ADC_CONFIGS['Bit-width'] == bit_width)
+            if sampling_rate_hz is not None:
+                query &= (DEFAULT_ADC_CONFIGS.conversion_rate >=
+                          sampling_rate_hz)
+
+            # Use prepared query mask to select matching settings from the
+            # table of valid ADC configurations.
+            matching_settings = DEFAULT_ADC_CONFIGS.loc[query]
+
+            # Find and select the ADC configuration with the minimum conversion
+            # rate.
+            # **TODO** The reasoning behind selecting the minimum conversion
+            # rate is that we expect it to lead to the lowest noise possible
+            # while still matching the specified requirements.
+            min_match_index = matching_settings['conversion_rate'].argmin()
+            adc_settings = matching_settings.loc[min_match_index].copy()
+
+            if resolution is None:
+                resolution = int(adc_settings['Bit-width'])
+
+            # Set the reference voltage based on whether or not differential is
+            # selected.
+            if differential:
+                # On the Teensy 3.2 architecture, the 1.2V reference voltage
+                # *must* be used when operating in differential (as opposed to
+                # singled-ended) mode.
+                self.setReference(teensy.ADC_REF_1V2, adc_num)
+                reference_V = 1.2
+            else:
+                self.setReference(teensy.ADC_REF_3V3, adc_num)
+                reference_V = 3.3
+            # Verify that a valid gain value has been specified.
+            assert(gain_power >= 0 and gain_power < 8)
+            adc_settings['gain_power'] = int(gain_power)
+
+            # Construct a Protocol Buffer message according to the selected ADC
+            # configuration settings.
+            adc_registers = \
+                ADC.Registers(CFG2=
+                              ADC.R_CFG2(MUXSEL=ADC.R_CFG2.B,
+                                         ADACKEN=
+                                         int(adc_settings['CFG2[ADACKEN]']),
+                                         ADLSTS=
+                                         int(adc_settings['CFG2[ADLSTS]']),
+                                         ADHSC=
+                                         int(adc_settings['CFG2[ADHSC]'])),
+                              CFG1=
+                              ADC.R_CFG1(ADLSMP=
+                                         int(adc_settings['CFG1[ADLSMP]']),
+                                         ADICLK=
+                                         int(adc_settings['CFG1[ADICLK]']),
+                                         ADIV=
+                                         int(adc_settings['CFG1[ADIV]'])))
+            if 'PGA' in adc_channel:
+                adc_registers.PGA.PGAG = adc_settings.gain_power
+                adc_registers.PGA.PGAEN = True
+
+            # Apply ADC `CFG*` register settings.
+            self.update_adc_registers(adc_num, adc_registers)
+
+            # Apply non-`CFG*` ADC settings using Teensy ADC library API.
+            # We use the Teensy API here because it handles calibration, etc.
+            # automatically.
+            self.setAveraging(average_count, adc_num)
+            self.setResolution(resolution, adc_num)
+
+            # Create `AdcSampler` for:
+            #  - The specified sample count.
+            #  - The specified channel.
+            #      * **N.B.,** The `AdcSampler` supports scanning multiple
+            #        channels, but in this function, we're only reading from a
+            #        single channel.
+            channels = [adc_channel]
+
+            if sampling_rate_hz is None:
+                # By default, use a sampling rate that is 90% of the maximum
+                # conversion rate for the selected ADC settings.
+                #
+                # **TODO** We arrived at this after a handful of empirical
+                # tests. We think this is necessary due to the slight deviation
+                # of the computed conversion rates (see TODO in
+                # `adc_sampler.get_adc_configs`) from those computed by the
+                # [Freescale ADC calculator][1].
+                #
+                # [1]: http://www.freescale.com/products/arm-processors/kinetis-cortex-m/adc-calculator:ADC_CALCULATOR
+                sampling_rate_hz = (int(.9 * adc_settings.conversion_rate) &
+                                    0xFFFFFFFE)
+
+            adc_sampler = AdcSampler(self, channels, sample_count)
+            adc_sampler.reset()
+            adc_sampler.start_read(sampling_rate_hz)
+            df_adc_results = adc_sampler.get_results().astype('int16')
+            df_volts = reference_V * (df_adc_results /
+                                    (1 << (resolution +
+                                           adc_settings.gain_power)))
+            return sampling_rate_hz, adc_settings, df_volts, df_adc_results
 
 
     class Proxy(ProxyMixin, _Proxy):

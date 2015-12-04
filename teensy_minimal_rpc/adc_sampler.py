@@ -5,10 +5,60 @@ import arduino_helpers.hardware.teensy.adc as adc
 import arduino_helpers.hardware.teensy.dma as dma
 import arduino_helpers.hardware.teensy.pdb as pdb
 import arduino_helpers.hardware.teensy as teensy
-from . import package_path
 import teensy_minimal_rpc.DMA as DMA
 import teensy_minimal_rpc.ADC as ADC
 import teensy_minimal_rpc.SIM as SIM
+
+
+def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
+    '''
+    Return `pandas.DataFrame` containing one ADC configuration per row.
+
+    The conversion time is calculated according to the "ConversionTime"
+    equation (see 31.4.5.5/681) in `K20P64M72SF1RM` manual.
+
+    **TODO** The conversion times calculated in this function seem to
+    differ from those calculated by the Kinetis ADC conversion time
+    calculator.  For now, we assume that they are close enough for
+    practical use, but there might be some edge cases where
+    inappropriate ADC settings may be chosen as a result.
+    '''
+    from . import package_path
+
+    # Read serialized (HDF) table of all possible ADC configurations (not all
+    # valid).
+    df_adc_configs = pd.read_hdf(package_path().joinpath('static', 'data',
+                                                         'adc_configs.h5'))
+
+    df_adc_configs = (df_adc_configs
+                      .loc[(df_adc_configs['CFG2[ADACKEN]'] == 0) &
+                           (df_adc_configs['CFG1[ADICLK]'] == 1)])
+    df_adc_configs.insert(3, 'CFG1[ADIV]', 0)
+    df_adc_configs['ADC_CLK'] = ADC_CLK
+
+    # Maximum ADC clock for 16-bit conversion is 11MHz.
+    df_adc_configs.loc[(df_adc_configs['Bit-width'] >= 16) &
+                       (df_adc_configs['ADC_CLK'] > 11e6),
+                       'ADC_CLK'] = 11e6
+    # If the ADC clock is 8MHz or higher, ADHSC (high-speed clock) bit
+    # must be set.
+    df_adc_configs.loc[df_adc_configs.ADC_CLK >= 8e6, 'CFG2[ADHSC]'] = 1
+
+    conversion_time = (df_adc_configs['bus clock'] / F_BUS +
+                       df_adc_configs.extra_us * 1e-6 +
+                       1 / df_adc_configs.ADC_CLK
+                       * (df_adc_configs.ADCK
+                          + df_adc_configs.AverageNum
+                          * (df_adc_configs.ADCK_bct +
+                             df_adc_configs.ADCK_lst_adder +
+                             df_adc_configs.ADCK_hsc_adder)))
+    df_adc_configs['conversion_time'] = conversion_time
+    df_adc_configs['conversion_rate'] = 1 / conversion_time
+    return (df_adc_configs.reset_index(drop=True).drop_duplicates()
+            .sort_values('conversion_time'))
+
+
+DEFAULT_ADC_CONFIGS = get_adc_configs()
 
 
 class AdcSampler(object):
@@ -270,214 +320,3 @@ class AdcSampler(object):
                                       .reshape(-1, self.sample_count).T,
                                       columns=self.channels)
         return df_adc_results
-
-
-def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
-    '''
-    Return `pandas.DataFrame` containing one ADC configuration per row.
-
-    The conversion time is calculated according to the "ConversionTime"
-    equation (see 31.4.5.5/681) in `K20P64M72SF1RM` manual.
-
-    **TODO** The conversion times calculated in this function seem to
-    differ from those calculated by the Kinetis ADC conversion time
-    calculator.  For now, we assume that they are close enough for
-    practical use, but there might be some edge cases where
-    inappropriate ADC settings may be chosen as a result.
-    '''
-    # Read serialized (HDF) table of all possible ADC configurations (not all
-    # valid).
-    df_adc_configs = pd.read_hdf(package_path().joinpath('static', 'data',
-                                                         'adc_configs.h5'))
-
-    df_adc_configs = (df_adc_configs
-                      .loc[(df_adc_configs['CFG2[ADACKEN]'] == 0) &
-                           (df_adc_configs['CFG1[ADICLK]'] == 1)])
-    df_adc_configs.insert(3, 'CFG1[ADIV]', 0)
-    df_adc_configs['ADC_CLK'] = ADC_CLK
-
-    # Maximum ADC clock for 16-bit conversion is 11MHz.
-    df_adc_configs.loc[(df_adc_configs['Bit-width'] >= 16) &
-                       (df_adc_configs['ADC_CLK'] > 11e6),
-                       'ADC_CLK'] = 11e6
-    # If the ADC clock is 8MHz or higher, ADHSC (high-speed clock) bit
-    # must be set.
-    df_adc_configs.loc[df_adc_configs.ADC_CLK >= 8e6, 'CFG2[ADHSC]'] = 1
-
-    conversion_time = (df_adc_configs['bus clock'] / F_BUS +
-                       df_adc_configs.extra_us * 1e-6 +
-                       1 / df_adc_configs.ADC_CLK
-                       * (df_adc_configs.ADCK
-                          + df_adc_configs.AverageNum
-                          * (df_adc_configs.ADCK_bct +
-                             df_adc_configs.ADCK_lst_adder +
-                             df_adc_configs.ADCK_hsc_adder)))
-    df_adc_configs['conversion_time'] = conversion_time
-    df_adc_configs['conversion_rate'] = 1 / conversion_time
-    return (df_adc_configs.reset_index(drop=True).drop_duplicates()
-            .sort_values('conversion_time'))
-
-
-def analog_reads(proxy, adc_channel, sample_count, resolution=None,
-                 average_count=1, sampling_rate_hz=None, differential=False,
-                 gain_power=0, adc_num=teensy.ADC_0):
-    '''
-    Read multiple samples from a single ADC channel, using the minimum
-    conversion rate for specified sampling parameters.
-
-    The reasoning behind selecting the minimum conversion rate is that we
-    expect it to lead to the lowest noise possible while still matching the
-    specified requirements.
-    **TODO** Should this be handled differently?
-
-    Parameters
-    ----------
-    proxy : SerialProxy, etc.
-        Teensy RPC proxy instance.
-    adc_channel : string
-        ADC channel to measure (e.g., `'A0'`, `'PGA0'`, etc.).
-    sample_count : int
-        Number of samples to measure.
-    resolution : int
-        Bit resolution to sample at.  Must be one of: 8, 10, 12, 16.
-    average_count : int
-        Hardware average count.
-    sampling_rate_hz : int
-        Sampling rate.  If not specified, sampling rate will be based on
-        minimum conversion rate based on remaining ADC settings.
-    differential : bool
-        If `True`, use differential mode.  Otherwise, use single-ended mode.
-    gain_power : int
-        When measuring a `'PGA*'` channel (also implies differential mode),
-        apply a gain of `2^gain_power` using the hardware programmable
-        amplifier gain.
-    adc_num : int
-        The ADC to use for the measurement (default is `teensy.ADC_0`).
-
-    Returns
-    -------
-    sampling_rate_hz : int
-        Number of samples per second.
-    adc_settings : pandas.Series
-        ADC settings used.
-    df_volts : pandas.DataFrame
-        Voltage readings (based on reference voltage and gain).
-    df_adc_results : pandas.DataFrame
-        Raw ADC values (range depends on resolution, i.e.,
-        `adc_settings['Bit-width']`).
-    '''
-    # Select ADC settings to achieve minimum conversion rate for specified
-    # resolution, mode (i.e., single-ended or differential), and number of
-    # samples to average per conversion (i.e., average count).
-    bit_width = resolution
-
-    if 'PGA' in adc_channel:
-        differential = True
-
-    if differential:
-        if resolution < 16 and not (resolution & 0x01):
-            # An even number of bits was specified for resolution in
-            # differential mode. However, bit-widths are actually increased by
-            # one bit, where the additional bit indicates the sign of the
-            # result.
-            bit_width += 1
-
-    elif gain_power > 0:
-        raise ValueError('Programmable gain amplification is only valid in '
-                         'differential mode.')
-    mode = 'differential' if differential else 'single-ended'
-
-    # Build up a query mask based on specified options.
-    query = ((DEFAULT_ADC_CONFIGS.AverageNum == average_count)
-             & (DEFAULT_ADC_CONFIGS.Mode == mode))
-    if resolution is not None:
-        query &= (DEFAULT_ADC_CONFIGS['Bit-width'] == bit_width)
-    if sampling_rate_hz is not None:
-        query &= (DEFAULT_ADC_CONFIGS.conversion_rate >= sampling_rate_hz)
-
-    # Use prepared query mask to select matching settings from the table of
-    # valid ADC configurations.
-    matching_settings = DEFAULT_ADC_CONFIGS.loc[query]
-
-    # Find and select the ADC configuration with the minimum conversion rate.
-    # **TODO** The reasoning behind selecting the minimum conversion rate is
-    # that we expect it to lead to the lowest noise possible while still
-    # matching the specified requirements.
-    min_match_index = matching_settings['conversion_rate'].argmin()
-    adc_settings = matching_settings.loc[min_match_index].copy()
-
-    if resolution is None:
-        resolution = int(adc_settings['Bit-width'])
-
-    # Set the reference voltage based on whether or not differential is
-    # selected.
-    if differential:
-        # On the Teensy 3.2 architecture, the 1.2V reference voltage *must* be
-        # used when operating in differential (as opposed to singled-ended)
-        # mode.
-        proxy.setReference(teensy.ADC_REF_1V2, adc_num)
-        reference_V = 1.2
-    else:
-        proxy.setReference(teensy.ADC_REF_3V3, adc_num)
-        reference_V = 3.3
-    # Verify that a valid gain value has been specified.
-    assert(gain_power >= 0 and gain_power < 8)
-    adc_settings['gain_power'] = int(gain_power)
-
-    # Construct a Protocol Buffer message according to the selected ADC
-    # configuration settings.
-    adc_registers = ADC.Registers(CFG2=ADC.R_CFG2(MUXSEL=ADC.R_CFG2.B,
-                                                  ADACKEN=
-                                                  int(adc_settings['CFG2[ADACKEN]']),
-                                                  ADLSTS=
-                                                  int(adc_settings['CFG2[ADLSTS]']),
-                                                  ADHSC=
-                                                  int(adc_settings['CFG2[ADHSC]'])),
-                                  CFG1=ADC.R_CFG1(ADLSMP=
-                                                  int(adc_settings['CFG1[ADLSMP]']),
-                                                  ADICLK=
-                                                  int(adc_settings['CFG1[ADICLK]']),
-                                                  ADIV=
-                                                  int(adc_settings['CFG1[ADIV]'])))
-    if 'PGA' in adc_channel:
-        adc_registers.PGA.PGAG = adc_settings.gain_power
-        adc_registers.PGA.PGAEN = True
-
-    # Apply ADC `CFG*` register settings.
-    proxy.update_adc_registers(adc_num, adc_registers)
-
-    # Apply non-`CFG*` ADC settings using Teensy ADC library API.
-    # We use the Teensy API here because it handles calibration, etc.
-    # automatically.
-    proxy.setAveraging(average_count, adc_num)
-    proxy.setResolution(resolution, adc_num)
-
-    # Create `AdcSampler` for:
-    #  - The specified sample count.
-    #  - The specified channel.
-    #      * **N.B.,** The `AdcSampler` supports scanning multiple channels,
-    #        but in this function, we're only reading from a single channel.
-    channels = [adc_channel]
-
-    if sampling_rate_hz is None:
-        # By default, use a sampling rate that is 90% of the maximum conversion
-        # rate for the selected ADC settings.
-        #
-        # **TODO** We arrived at this after a handful of empirical tests.  We
-        # think this is necessary due to the slight deviation of the computed
-        # conversion rates (see TODO in `get_adc_configs`) from those computed
-        # by the [Freescale ADC calculator][1].
-        #
-        # [1]: http://www.freescale.com/products/arm-processors/kinetis-cortex-m/adc-calculator:ADC_CALCULATOR
-        sampling_rate_hz = int(.9 * adc_settings.conversion_rate) & 0xFFFFFFFE
-
-    adc_sampler = AdcSampler(proxy, channels, sample_count)
-    adc_sampler.reset()
-    adc_sampler.start_read(sampling_rate_hz)
-    df_adc_results = adc_sampler.get_results().astype('int16')
-    df_volts = reference_V * (df_adc_results /
-                              (1 << (resolution + adc_settings.gain_power)))
-    return sampling_rate_hz, adc_settings, df_volts, df_adc_results
-
-
-DEFAULT_ADC_CONFIGS = get_adc_configs()
