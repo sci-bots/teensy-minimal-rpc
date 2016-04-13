@@ -1,7 +1,6 @@
 #ifndef ___NODE__H___
 #define ___NODE__H___
 
-#include <list>
 #include <string.h>
 #include <stdint.h>
 #include <Arduino.h>
