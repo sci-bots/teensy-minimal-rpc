@@ -242,7 +242,8 @@ try:
                 differential = True
 
             if differential:
-                if resolution < 16 and not (resolution & 0x01):
+                if (resolution is not None) and ((resolution < 16) and not
+                                                 (resolution & 0x01)):
                     # An even number of bits was specified for resolution in
                     # differential mode. However, bit-widths are actually
                     # increased by one bit, where the additional bit indicates
