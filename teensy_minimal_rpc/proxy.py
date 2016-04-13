@@ -350,7 +350,8 @@ try:
             adc_sampler = AdcSampler(self, channels, sample_count)
             adc_sampler.reset()
             adc_sampler.start_read(sampling_rate_hz)
-            df_adc_results = adc_sampler.get_results().astype('int16')
+            dtype = 'int16' if differential else 'uint16'
+            df_adc_results = adc_sampler.get_results().astype(dtype)
             df_volts = reference_V * (df_adc_results /
                                     (1 << (resolution +
                                            adc_settings.gain_power)))
