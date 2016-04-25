@@ -1,8 +1,12 @@
 from path_helpers import path
 try:
+    from base_node_rpc.proxy import StateMixinBase
     import arduino_helpers.hardware.teensy as teensy
+
     from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
                        SerialProxy as _SerialProxy)
+    from .state import State
+
 
     HW_TCDS_ADDR = 0x40009000
     TCD_RECORD_DTYPE = [('SADDR', 'uint32'),
@@ -18,7 +22,13 @@ try:
                         ('BITER', 'uint16')]
 
 
-    class ProxyMixin(object):
+    class StateMixin(StateMixinBase):
+        @property
+        def state_class(self):
+            return State
+
+
+    class ProxyMixin(StateMixin):
         '''
         Mixin class to add convenience wrappers around methods of the generated
         `node.Proxy` class.
@@ -129,57 +139,6 @@ try:
             #    protobuf message and binary TCD struct.
             self.mem_cpy_host_to_device(HW_TCDS_ADDR, tcd_struct.tostring())
             return TCD.FromString(self.read_dma_TCD(0).tostring())
-
-        @property
-        def config(self):
-            from .config import Config
-
-            return Config.FromString(self.serialize_config().tostring())
-
-        @config.setter
-        def config(self, value):
-            return self.update_config(value)
-
-        @property
-        def state(self):
-            from .config import State
-
-            return State.FromString(self.serialize_state().tostring())
-
-        @state.setter
-        def state(self, value):
-            return self.update_state(value)
-
-        def update_config(self, **kwargs):
-            '''
-            Update fields in the config object based on keyword arguments.
-
-            By default, these values will be saved to EEPROM. To prevent this
-            (e.g., to verify system behavior before committing the changes),
-            you can pass the special keyword argument 'save=False'. In this case,
-            you will need to call the method save_config() to make your changes
-            persistent.
-            '''
-
-            from .config import Config
-
-            save = True
-            if 'save' in kwargs.keys() and not kwargs.pop('save'):
-                save = False
-
-            config = Config(**kwargs)
-            return_code = super(ProxyMixin, self).update_config(config)
-
-            if save:
-                super(ProxyMixin, self).save_config()
-
-            return return_code
-
-        def update_state(self, **kwargs):
-            from .config import State
-
-            state = State(**kwargs)
-            return super(ProxyMixin, self).update_state(state)
 
         def analog_reads(self, adc_channel, sample_count, resolution=None,
                          average_count=1, sampling_rate_hz=None,
