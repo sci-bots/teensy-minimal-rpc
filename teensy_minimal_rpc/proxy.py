@@ -1,10 +1,11 @@
 from path_helpers import path
 try:
-    from base_node_rpc.proxy import StateMixinBase
+    from base_node_rpc.proxy import ConfigMixinBase, StateMixinBase
     import arduino_helpers.hardware.teensy as teensy
 
     from .node import (Proxy as _Proxy, I2cProxy as _I2cProxy,
                        SerialProxy as _SerialProxy)
+    from .config import Config
     from .state import State
 
 
@@ -22,13 +23,19 @@ try:
                         ('BITER', 'uint16')]
 
 
+    class ConfigMixin(ConfigMixinBase):
+        @property
+        def config_class(self):
+            return Config
+
+
     class StateMixin(StateMixinBase):
         @property
         def state_class(self):
             return State
 
 
-    class ProxyMixin(StateMixin):
+    class ProxyMixin(ConfigMixin, StateMixin):
         '''
         Mixin class to add convenience wrappers around methods of the generated
         `node.Proxy` class.

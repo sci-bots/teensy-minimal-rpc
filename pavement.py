@@ -50,6 +50,7 @@ options(
                   'BaseNodeEeprom',
                   'BaseNodeI2c',
                   'BaseNodeI2cHandler<Handler>',
+                  'BaseNodeConfig<ConfigMessage, Address>',
                   'BaseNodeState<StateMessage>'],
     rpc_classes=['teensy_minimal_rpc::Node'],
     DEFAULT_ARDUINO_BOARDS=DEFAULT_ARDUINO_BOARDS,

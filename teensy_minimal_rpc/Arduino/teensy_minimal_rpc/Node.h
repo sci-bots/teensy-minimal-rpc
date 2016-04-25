@@ -11,6 +11,7 @@
 #include <BaseNodeRpc/BaseNode.h>
 #include <BaseNodeRpc/BaseNodeEeprom.h>
 #include <BaseNodeRpc/BaseNodeI2c.h>
+#include <BaseNodeRpc/BaseNodeConfig.h>
 #include <BaseNodeRpc/BaseNodeState.h>
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
@@ -27,7 +28,9 @@
 #include <pb_validate.h>
 #include <pb_cpp_api.h>
 #include <LinkedList.h>
+#include "teensy_minimal_rpc_config_validate.h"
 #include "teensy_minimal_rpc_state_validate.h"
+#include "TeensyMinimalRpc/config_pb.h"
 #include "TeensyMinimalRpc/state_pb.h"
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
@@ -65,6 +68,8 @@ const size_t FRAME_SIZE = (3 * sizeof(uint8_t)  // Frame boundary
 
 class Node;
 
+typedef nanopb::EepromMessage<teensy_minimal_rpc_Config,
+                              config_validate::Validator<Node> > config_t;
 typedef nanopb::Message<teensy_minimal_rpc_State,
                         state_validate::Validator<Node> > state_t;
 
@@ -72,6 +77,7 @@ class Node :
   public BaseNode,
   public BaseNodeEeprom,
   public BaseNodeI2c,
+  public BaseNodeConfig<config_t>,
   public BaseNodeState<state_t>,
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,
@@ -103,6 +109,7 @@ public:
 
   Node()
     : BaseNode(),
+      BaseNodeConfig<config_t>(teensy_minimal_rpc_Config_fields),
       BaseNodeState<state_t>(teensy_minimal_rpc_State_fields),
       dmaBuffer_(NULL),
       adc_period_us_(0),
@@ -120,6 +127,8 @@ public:
    * `BaseNode...` classes. */
 
   void begin();
+  void set_i2c_address(uint8_t value);  // Override to validate i2c address
+
   /****************************************************************************
    * # User-defined methods #
    *
