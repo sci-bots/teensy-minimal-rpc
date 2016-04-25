@@ -9,6 +9,7 @@
 #include "RPCBuffer.h"  // Define packet sizes
 #include "TeensyMinimalRpc/Properties.h"  // Define package name, URL, etc.
 #include <BaseNodeRpc/BaseNode.h>
+#include <BaseNodeRpc/BaseNodeEeprom.h>
 #include <BaseNodeRpc/BaseNodeI2c.h>
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
@@ -21,6 +22,7 @@
 #include <TeensyMinimalRpc/SIM.h>  // System integration module (clock gating)
 #include <TeensyMinimalRpc/PIT.h>  // Programmable interrupt timer
 #include <TeensyMinimalRpc/aligned_alloc.h>
+#include <pb_eeprom.h>
 #include <pb_cpp_api.h>
 #include <LinkedList.h>
 
@@ -61,6 +63,7 @@ class Node;
 
 class Node :
   public BaseNode,
+  public BaseNodeEeprom,
   public BaseNodeI2c,
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,

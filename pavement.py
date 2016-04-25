@@ -47,6 +47,7 @@ options(
     PROPERTIES=PROPERTIES,
     LIB_PROPERTIES=LIB_PROPERTIES,
     base_classes=['BaseNodeSerialHandler',
+                  'BaseNodeEeprom',
                   'BaseNodeI2c',
                   'BaseNodeI2cHandler<Handler>'],
     rpc_classes=['teensy_minimal_rpc::Node'],
