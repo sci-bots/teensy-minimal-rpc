@@ -9,6 +9,8 @@
 #include "RPCBuffer.h"  // Define packet sizes
 #include "TeensyMinimalRpc/Properties.h"  // Define package name, URL, etc.
 #include <BaseNodeRpc/BaseNode.h>
+#include <BaseNodeRpc/BaseNodeI2c.h>
+#include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
@@ -57,9 +59,13 @@ const size_t FRAME_SIZE = (3 * sizeof(uint8_t)  // Frame boundary
 
 class Node;
 
-
 class Node :
-  public BaseNode, public BaseNodeSerialHandler {
+  public BaseNode,
+  public BaseNodeI2c,
+#ifndef DISABLE_SERIAL
+  public BaseNodeSerialHandler,
+#endif  // #ifndef DISABLE_SERIAL
+  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t> {
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
