@@ -309,7 +309,7 @@ class AdcSampler(object):
         # **N.B.,** Timer will be stopped by the scatter DMA channel major loop
         # interrupt handler after `sample_count` samples have been collected.
 
-    def __dealloc__(self):
+    def __del__(self):
         self.allocs[['scan_result', 'samples']].map(self.proxy.mem_free)
         self.allocs[['sc1as', 'tcds']].map(self.proxy.mem_aligned_free)
 
