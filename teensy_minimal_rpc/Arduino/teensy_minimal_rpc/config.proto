@@ -12,8 +12,12 @@ message Config {
    * This makes it possible for clients/devices based on the base-node-rpc
    * package to interface with each other. */
   optional uint32 serial_number = 1;
-  optional uint32 baud_rate = 2 [default = 115200];
+  /*optional uint32 baud_rate = 2 [default = 115200];*/
   optional uint32 i2c_address = 3;
+  optional uint32 uuid1 = 4;
+  optional uint32 uuid2 = 5;
+  optional uint32 uuid3 = 6;
+  optional uint32 uuid4 = 7;
 
   /* Start new fields below.
    * For example:

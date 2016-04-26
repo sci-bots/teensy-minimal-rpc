@@ -1,4 +1,7 @@
+import uuid
+
 from path_helpers import path
+import numpy as np
 try:
     from base_node_rpc.proxy import ConfigMixinBase, StateMixinBase
     import arduino_helpers.hardware.teensy as teensy
@@ -27,6 +30,22 @@ try:
         @property
         def config_class(self):
             return Config
+
+        @property
+        def uuid(self):
+            config = self.config
+            return uuid.UUID(bytes=np.array([getattr(config,
+                                                     'uuid{}'.format(i + 1))
+                                             for i in xrange(4)],
+                                            dtype='uint32').tostring())
+
+        @uuid.setter
+        def uuid(self, uuid_):
+            uuid_dict_i = dict([('uuid{}'.format(i + 1), int(v))
+                                for i, v in
+                                enumerate(np.fromstring(uuid_.bytes,
+                                                        dtype='uint32'))])
+            return self.update_config(**uuid_dict_i)
 
 
     class StateMixin(StateMixinBase):
