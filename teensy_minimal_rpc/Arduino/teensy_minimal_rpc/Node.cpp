@@ -15,7 +15,7 @@ void Node::begin() {
   Serial.begin(115200);
 #endif  // #ifndef DISABLE_SERIAL
   adc_ = new ADC();
-  Wire.setClock(400000);
+  if (config_._.i2c_address > 0) { Wire.setClock(400000); }
 }
 
 
