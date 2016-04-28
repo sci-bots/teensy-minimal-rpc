@@ -35,12 +35,14 @@ void setup() {
 
 
 void loop() {
+#ifndef DISABLE_SERIAL
   /* Parse all new bytes that are available.  If the parsed bytes result in a
    * completed packet, pass the complete packet to the command-processor to
    * process the request. */
   if (node_obj.serial_handler_.packet_ready()) {
     node_obj.serial_handler_.process_packet(command_processor);
   }
+#endif  // #ifndef DISABLE_SERIAL
   node_obj.loop();
 }
 
