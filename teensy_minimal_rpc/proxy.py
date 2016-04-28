@@ -33,19 +33,18 @@ try:
 
         @property
         def uuid(self):
-            config = self.config
-            return uuid.UUID(bytes=np.array([getattr(config,
-                                                     'uuid{}'.format(i + 1))
-                                             for i in xrange(4)],
-                                            dtype='uint32').tostring())
+            '''
+            Returns
+            -------
 
-        @uuid.setter
-        def uuid(self, uuid_):
-            uuid_dict_i = dict([('uuid{}'.format(i + 1), int(v))
-                                for i, v in
-                                enumerate(np.fromstring(uuid_.bytes,
-                                                        dtype='uint32'))])
-            return self.update_config(**uuid_dict_i)
+                (uuid.UUID) : UUID constructed from the [Unique Identification
+                    Register][1] (12.2.19 page 265).
+
+
+            [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+            '''
+            return uuid.UUID(bytes=np.array(self._uuid(),
+                                            dtype='uint8').tostring())
 
 
     class StateMixin(StateMixinBase):

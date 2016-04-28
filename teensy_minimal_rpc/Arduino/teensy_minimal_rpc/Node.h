@@ -286,6 +286,13 @@ public:
   }
   UInt8Array read_sim_SCGC6() { return teensy::sim::serialize_SCGC6(get_buffer()); }
   UInt8Array read_sim_SCGC7() { return teensy::sim::serialize_SCGC7(get_buffer()); }
+  UInt8Array _uuid() {
+    /* Read unique chip identifier. */
+    UInt8Array result = get_buffer();
+    result.length = 4 * sizeof(uint32_t);
+    memcpy(&result.data[0], &SIM_UIDH, result.length);
+    return result;
+  }
 
   // ##########################################################################
   // # Mutator methods
