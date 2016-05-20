@@ -24,6 +24,7 @@ arduino_rpc/protobuf_commands.py
 .ipynb_checkpoints
 */node.py
 */config.py
+*/state.py
 *~
 *.swp
 .project
@@ -33,3 +34,4 @@ teensy_minimal_rpc/DMA.py
 teensy_minimal_rpc/PIT.py
 teensy_minimal_rpc/SIM.py
 *.exe
+.idea
