@@ -9,9 +9,9 @@
 #include "NadaMQ.h"  // Required replacing `#ifndef AVR` with `#if !defined(AVR) && !defined(__arm__)`
 #include "CArrayDefs.h"
 #include "RPCBuffer.h"
-#include "NodeCommandProcessor.h"
 #include "BaseNodeRpc.h"  // Check for changes (may have removed some include statements...
 #include "TeensyMinimalRpc.h"
+#include "NodeCommandProcessor.h"
 #include "ADC.h"
 #include "Node.h"
 
