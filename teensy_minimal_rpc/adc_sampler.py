@@ -12,16 +12,21 @@ import teensy_minimal_rpc.SIM as SIM
 
 def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
     '''
-    Return `pandas.DataFrame` containing one ADC configuration per row.
+    Returns
+    -------
+    pandas.DataFrame
+        Table containing one ADC configuration per row.
 
+    Notes
+    -----
     The conversion time is calculated according to the "ConversionTime"
     equation (see 31.4.5.5/681) in `K20P64M72SF1RM` manual.
 
-    **TODO** The conversion times calculated in this function seem to
-    differ from those calculated by the Kinetis ADC conversion time
-    calculator.  For now, we assume that they are close enough for
-    practical use, but there might be some edge cases where
-    inappropriate ADC settings may be chosen as a result.
+    **TODO** The conversion times calculated in this function seem to differ
+    from those calculated by the Kinetis ADC conversion time calculator.  For
+    now, we assume that they are close enough for practical use, but there
+    might be some edge cases where inappropriate ADC settings may be chosen as
+    a result.
     '''
     from . import package_path
 
@@ -89,7 +94,8 @@ class AdcSampler(object):
         self.sample_count = sample_count
         if dma_channels is None:
             dma_channels = pd.Series([0, 1, 2],
-                                     index=['scatter', 'i', 'ii'])
+                                     index=['scatter', 'adc_channel_configs',
+                                            'adc_conversion'])
         self.dma_channels = dma_channels
         self.adc_number = adc_number
 
@@ -107,19 +113,19 @@ class AdcSampler(object):
         self.configure_adc()
         self.configure_timer(1)
 
-        self.configure_dma_channel_ii_mux()
+        self.configure_dma_channel_adc_conversion_mux()
         self.assert_no_dma_error()
 
         self.configure_dma_channel_scatter()
         self.assert_no_dma_error()
 
-        self.configure_dma_channel_i()
+        self.configure_dma_channel_adc_channel_configs()
         self.assert_no_dma_error()
 
-        self.configure_dma_channel_ii()
+        self.configure_dma_channel_adc_conversion()
         self.assert_no_dma_error()
 
-        self.configure_dma_channel_i_mux()
+        self.configure_dma_channel_adc_channel_configs_mux()
         self.assert_no_dma_error()
 
     def assert_no_dma_error(self):
@@ -206,6 +212,175 @@ class AdcSampler(object):
         self.proxy.mem_fill_uint8(self.allocs.samples, 0,
                                   self.sample_count * self.N)
 
+    def configure_dma_channel_adc_channel_configs(self):
+        '''
+        Configure DMA channel ``adc_channel_configs`` to copy SC1A
+        configurations from :attr:`channel_sc1as`, one at a time, to the
+        :data:`ADC0_SC1A` register (i.e., ADC Status and Control Register 1).
+
+        See also
+        --------
+        :meth:`configure_dma_channel_adc_conversion`
+
+        :meth:`configure_dma_channel_scatter`
+
+        Section **ADC Status and Control Registers 1 (ADCx_SC1n) (31.3.1/653)**
+        in `K20P64M72SF1RM`_ manual.
+
+        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+        '''
+        sca1_tcd_msg = \
+            DMA.TCD(CITER_ELINKNO=
+                    DMA.R_TCD_ITER_ELINKNO(ELINK=False,
+                                           ITER=self.channel_sc1as.size),
+                    BITER_ELINKNO=
+                    DMA.R_TCD_ITER_ELINKNO(ELINK=False,
+                                           ITER=self.channel_sc1as.size),
+                    ATTR=DMA.R_TCD_ATTR(SSIZE=DMA.R_TCD_ATTR._32_BIT,
+                                        DSIZE=DMA.R_TCD_ATTR._32_BIT),
+                    NBYTES_MLNO=4,  # `SDA1` register is 4 bytes (32-bit)
+                    SADDR=int(self.allocs.sc1as),
+                    SOFF=4,
+                    SLAST=-self.channel_sc1as.size * 4,
+                    DADDR=int(adc.ADC0_SC1A),
+                    DOFF=0,
+                    DLASTSGA=0,
+                    CSR=DMA.R_TCD_CSR(START=0, DONE=False))
+
+        self.proxy.update_dma_TCD(self.dma_channels.adc_channel_configs,
+                                  sca1_tcd_msg)
+
+    def configure_dma_channel_adc_channel_configs_mux(self):
+        '''
+        Configure DMA channel ``adc_channel_configs`` to trigger based on
+        programmable delay block timer.
+
+        See also
+        --------
+        Section **DMA MUX request sources (3.3.8.1/77)** in `K20P64M72SF1RM`_
+        manual.
+
+        Section **DMA channels with periodic triggering capability
+        (20.4.1/367)** in `K20P64M72SF1RM`_ manual.
+
+        Section **Channel Configuration register (``DMAMUX_CHCFGn``)
+        (20.3.1/366)** in `K20P64M72SF1RM`_ manual.
+
+        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+        '''
+        # Configure DMA channel `i` enable to use MUX triggering from
+        # programmable delay block.
+        self.proxy.update_dma_mux_chcfg(self.dma_channels.adc_channel_configs,
+                                        DMA.MUX_CHCFG(SOURCE=
+                                                      dma.DMAMUX_SOURCE_PDB,
+                                                      TRIG=False,
+                                                      ENBL=True))
+
+        # Set enable request for DMA channel `i`.
+        #
+        # [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+        self.proxy.update_dma_registers(
+            DMA.Registers(SERQ=int(self.dma_channels.adc_channel_configs)))
+
+    def configure_dma_channel_adc_conversion_mux(self):
+        '''
+        Set mux source for DMA channel ``adc_conversion`` to ADC0 and enable
+        DMA for ADC0.
+
+        See also
+        --------
+        Section **Channel Configuration register (``DMAMUX_CHCFGn``)
+        (20.3.1/366)** in `K20P64M72SF1RM`_ manual.
+
+        Section **Status and Control Register 2 (ADCx_SC2) (31.3.6/661)** in
+        `K20P64M72SF1RM`_ manual.
+
+        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+        '''
+        self.proxy.update_dma_mux_chcfg(
+            self.dma_channels.adc_conversion,
+            DMA.MUX_CHCFG(
+                # Route ADC0 as DMA channel source.
+                SOURCE=dma.DMAMUX_SOURCE_ADC0,
+                TRIG=False,# Disable periodic trigger.
+                # Enable the DMAMUX configuration for channel.
+                ENBL=True))
+        # Update ADC0_SC2 to enable DMA and assert the ADC DMA request during
+        # an ADC conversion complete event noted when any of the `SC1n[COCO]`
+        # (i.e., conversion complete) flags is asserted.
+        self.proxy.enableDMA(teensy.ADC_0)
+
+    def configure_dma_channel_adc_conversion(self):
+        '''
+        Configure DMA channel ``adc_conversion`` to:
+
+         - Copy result after completion of each ADC conversion to subsequent
+           locations in :attr:`allocs.scan_result` array.
+         - Trigger DMA channel ``adc_channel_configs`` after each ADC
+           conversion to copy next ADC configuration to SC1A register (i.e.,
+           ADC Status and Control Register 1).
+         - Trigger DMA channel ``scatter`` to start after completion of major
+           loop.
+
+        Notes
+        -----
+            After starting PDB timer with :meth:`start_read`, DMA channel
+            ``adc_conversion`` will continue to scan analog input channels
+            until the PDB timer is stopped.  The handler for the completed
+            scatter DMA interrupt currently stops the PDB timer.
+
+        See also
+        --------
+        :meth:`configure_dma_channel_adc_channel_configs`
+
+        :meth:`configure_dma_channel_scatter`
+
+        Section **ADC Status and Control Registers 1 (ADCx_SC1n) (31.3.1/653)**
+        in `K20P64M72SF1RM`_ manual.
+
+        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
+        '''
+        # **NOTE**: "When the CITER field is initially loaded by software, it
+        # must be set to the same value as that contained in the BITER field."
+        # CITER is current major iteration count, and BITER is the
+        # starting/beginning major iteration count.
+        #
+        # See `CITER` field section **TCD Current Minor Loop Link, Major Loop
+        # Count (Channel Linking Disabled) (`DMA_TCDn_CITER_ELINKNO`)
+        # (21.3.27/423)
+        tcd_msg = DMA.TCD(
+            CITER_ELINKYES=
+            DMA.R_TCD_ITER_ELINKYES(ELINK=True,
+                                    LINKCH=1,
+                                    ITER=self.channel_sc1as.size),
+            BITER_ELINKYES=
+            DMA.R_TCD_ITER_ELINKYES(ELINK=True,
+                                    LINKCH=1,
+                                    ITER=self.channel_sc1as.size),
+            ATTR=DMA.R_TCD_ATTR(SSIZE=DMA.R_TCD_ATTR._16_BIT,
+                                DSIZE=DMA.R_TCD_ATTR._16_BIT),
+            NBYTES_MLNO=2,  # sizeof(uint16)
+            SADDR=adc.ADC0_RA,
+            SOFF=0,
+            SLAST=0,
+            DADDR=int(self.allocs.scan_result),
+            DOFF=2,
+            DLASTSGA=-self.N,
+            CSR=DMA.R_TCD_CSR(START=0, DONE=False,
+                              # Start `scatter` DMA channel
+                              # after completion of major loop.
+                              MAJORELINK=True,
+                              MAJORLINKCH=
+                              int(self.dma_channels.scatter)))
+
+        self.proxy.update_dma_TCD(self.dma_channels.adc_conversion, tcd_msg)
+
+        # DMA request input signals and this enable request flag
+        # must be asserted before a channel’s hardware service
+        # request is accepted (21.3.3/394).
+        self.proxy.update_dma_registers(
+            DMA.Registers(SERQ=int(self.dma_channels.adc_conversion)))
+
     def configure_dma_channel_scatter(self):
         '''
         Configure a Transfer Control Descriptor structure for *each scan* of
@@ -225,6 +400,10 @@ class AdcSampler(object):
         See also
         --------
         :meth:`allocate_device_arrays`
+
+        :meth:`configure_dma_channel_adc_channel_configs`
+
+        :meth:`configure_dma_channel_adc_conversion`
         '''
         # Create Transfer Control Descriptor configuration for first chunk, encoded
         # as a Protocol Buffer message.
@@ -274,71 +453,6 @@ class AdcSampler(object):
                                           tcd0.tostring())
         # Attach interrupt handler to scatter DMA channel.
         self.proxy.attach_dma_interrupt(self.dma_channels.scatter)
-
-    def configure_dma_channel_i(self):
-        '''
-        Configure DMA channel ``i`` to copy SC1A configurations from
-        :attr:`channel_sc1as`, one at a time, to the :data:`ADC0_SC1A` register
-        (i.e., ADC Status and Control Register 1).
-
-        See also
-        --------
-        Section **ADC Status and Control Registers 1 (ADCx_SC1n) (31.3.1/653)**
-        in `K20P64M72SF1RM`_ manual.
-
-        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        '''
-        sca1_tcd_msg = \
-            DMA.TCD(CITER_ELINKNO=
-                    DMA.R_TCD_ITER_ELINKNO(ELINK=False,
-                                           ITER=self.channel_sc1as.size),
-                    BITER_ELINKNO=
-                    DMA.R_TCD_ITER_ELINKNO(ELINK=False,
-                                           ITER=self.channel_sc1as.size),
-                    ATTR=DMA.R_TCD_ATTR(SSIZE=DMA.R_TCD_ATTR._32_BIT,
-                                        DSIZE=DMA.R_TCD_ATTR._32_BIT),
-                    NBYTES_MLNO=4,  # `SDA1` register is 4 bytes (32-bit)
-                    SADDR=int(self.allocs.sc1as),
-                    SOFF=4,
-                    SLAST=-self.channel_sc1as.size * 4,
-                    DADDR=int(adc.ADC0_SC1A),
-                    DOFF=0,
-                    DLASTSGA=0,
-                    CSR=DMA.R_TCD_CSR(START=0, DONE=False))
-
-        self.proxy.update_dma_TCD(self.dma_channels.i, sca1_tcd_msg)
-
-    def configure_dma_channel_i_mux(self):
-        '''
-        Configure DMA channel ``i`` to trigger based on programmable delay
-        block timer.
-
-        See also
-        --------
-        Section **DMA MUX request sources (3.3.8.1/77)** in `K20P64M72SF1RM`_
-        manual.
-
-        Section **DMA channels with periodic triggering capability
-        (20.4.1/367)** in `K20P64M72SF1RM`_ manual.
-
-        Section **Channel Configuration register (``DMAMUX_CHCFGn``)
-        (20.3.1/366)** in `K20P64M72SF1RM`_ manual.
-
-        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        '''
-        # Configure DMA channel `i` enable to use MUX triggering from
-        # programmable delay block.
-        self.proxy.update_dma_mux_chcfg(self.dma_channels.i,
-                                        DMA.MUX_CHCFG(SOURCE=
-                                                      dma.DMAMUX_SOURCE_PDB,
-                                                      TRIG=False,
-                                                      ENBL=True))
-
-        # Set enable request for DMA channel `i`.
-        #
-        # [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        self.proxy.update_dma_registers(
-            DMA.Registers(SERQ=int(self.dma_channels.i)))
 
     def configure_adc(self):
         '''
@@ -420,118 +534,23 @@ class AdcSampler(object):
                                           .tostring())
         return PDB_CONFIG
 
-    def configure_dma_channel_ii_mux(self):
-        '''
-        Set mux source for DMA channel ``ii`` to ADC0 and enable DMA for ADC0.
-
-        See also
-        --------
-        Section **Channel Configuration register (``DMAMUX_CHCFGn``)
-        (20.3.1/366)** in `K20P64M72SF1RM`_ manual.
-
-        Section **Status and Control Register 2 (ADCx_SC2) (31.3.6/661)** in
-        `K20P64M72SF1RM`_ manual.
-
-        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        '''
-        self.proxy.update_dma_mux_chcfg(
-            self.dma_channels.ii,
-            DMA.MUX_CHCFG(
-                # Route ADC0 as DMA channel source.
-                SOURCE=dma.DMAMUX_SOURCE_ADC0,
-                TRIG=False,# Disable periodic trigger.
-                # Enable the DMAMUX configuration for channel.
-                ENBL=True))
-        # Update ADC0_SC2 to enable DMA and assert the ADC DMA request during
-        # an ADC conversion complete event noted when any of the `SC1n[COCO]`
-        # (i.e., conversion complete) flags is asserted.
-        self.proxy.enableDMA(teensy.ADC_0)
-
-    def configure_dma_channel_ii(self):
-        '''
-        Configure DMA channel ``ii`` to:
-
-         - Copy result after completion of each ADC conversion to subsequent
-           locations in :attr:`allocs.scan_result` array.
-         - Trigger DMA channel ``i`` after each ADC conversion to copy next ADC
-           configuration to SC1A register (i.e., ADC Status and Control
-           Register 1).
-         - Trigger DMA channel ``scatter`` to start after completion of major
-           loop.
-
-        Notes
-        -----
-            After starting PDB timer with :meth:`start_read`, DMA channel
-            ``ii`` will continue to scan analog input channels until the PDB
-            timer is stopped.  The handler for the completed scatter DMA
-            interrupt currently stops the PDB timer.
-
-        See also
-        --------
-        :meth:`configure_dma_channel_i`
-
-        Section **ADC Status and Control Registers 1 (ADCx_SC1n) (31.3.1/653)**
-        in `K20P64M72SF1RM`_ manual.
-
-        .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        '''
-        # **NOTE**: "When the CITER field is initially loaded by software, it
-        # must be set to the same value as that contained in the BITER field."
-        # CITER is current major iteration count, and BITER is the
-        # starting/beginning major iteration count.
-        #
-        # See `CITER` field section **TCD Current Minor Loop Link, Major Loop
-        # Count (Channel Linking Disabled) (`DMA_TCDn_CITER_ELINKNO`)
-        # (21.3.27/423)
-        tcd_msg = DMA.TCD(
-            CITER_ELINKYES=
-            DMA.R_TCD_ITER_ELINKYES(ELINK=True,
-                                    LINKCH=1,
-                                    ITER=self.channel_sc1as.size),
-            BITER_ELINKYES=
-            DMA.R_TCD_ITER_ELINKYES(ELINK=True,
-                                    LINKCH=1,
-                                    ITER=self.channel_sc1as.size),
-            ATTR=DMA.R_TCD_ATTR(SSIZE=DMA.R_TCD_ATTR._16_BIT,
-                                DSIZE=DMA.R_TCD_ATTR._16_BIT),
-            NBYTES_MLNO=2,  # sizeof(uint16)
-            SADDR=adc.ADC0_RA,
-            SOFF=0,
-            SLAST=0,
-            DADDR=int(self.allocs.scan_result),
-            DOFF=2,
-            DLASTSGA=-self.N,
-            CSR=DMA.R_TCD_CSR(START=0, DONE=False,
-                              # Start `scatter` DMA channel
-                              # after completion of major loop.
-                              MAJORELINK=True,
-                              MAJORLINKCH=
-                              int(self.dma_channels.scatter)))
-
-        self.proxy.update_dma_TCD(self.dma_channels.ii, tcd_msg)
-
-        # DMA request input signals and this enable request flag
-        # must be asserted before a channel’s hardware service
-        # request is accepted (21.3.3/394).
-        self.proxy.update_dma_registers(
-            DMA.Registers(SERQ=int(self.dma_channels.ii)))
-
     def start_read(self, sample_rate_hz):
         '''
         Trigger start of ADC sampling at the specified sampling rate.
 
          1. Start PDB timer according to specified sample rate (in Hz).
-         2. Each completion of the PDB timer triggers DMA channel ``i``
-            request.
-         3. Each request to DMA channel ``i`` copies the configuration for an
-            analog input channel to SC1A register (i.e., ADC Status and Control
-            Register 1), which triggers analog conversion.
-         4. Completion of analog conversion triggers DMA channel ``ii`` to copy
-            result from ``ADC0_RA`` to the respective position in the
-            :data:``scan_result`` array.
+         2. Each completion of the PDB timer triggers DMA channel
+            ``adc_channel_configs`` request.
+         3. Each request to DMA channel ``adc_channel_configs`` copies the
+            configuration for an analog input channel to SC1A register (i.e.,
+            ADC Status and Control Register 1), which triggers analog
+            conversion.
+         4. Completion of analog conversion triggers DMA channel
+            ``adc_conversion`` to copy result from ``ADC0_RA`` to the
+            respective position in the :data:``scan_result`` array.
          5. After each scan through **all channels** (i.e., after each DMA
-            channel ``ii`` major loop completion), trigger for DMA channel
-            ``scatter``.
+            channel ``adc_conversion`` major loop completion), trigger for DMA
+            channel ``scatter``.
          6. Each request to the ``scatter`` DMA channel scatters results from
             one scan pass to append onto a separate array for each analog input
             channel.
