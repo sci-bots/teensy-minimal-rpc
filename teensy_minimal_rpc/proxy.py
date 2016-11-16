@@ -73,11 +73,14 @@ try:
              - Enabling clock gating for DMA and DMA mux.
              - Resetting all DMA channel transfer control descriptors.
 
-            See the following sections in [K20P64M72SF1RM][1] for more information:
+            See the following sections in [K20P64M72SF1RM][1] for more
+            information:
 
              - (12.2.13/256) System Clock Gating Control Register 6 (SIM_SCGC6)
              - (12.2.14/259) System Clock Gating Control Register 7 (SIM_SCGC7)
              - (21.3.17/415) TCD registers
+
+            [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
             '''
             from .SIM import R_SCGC6, R_SCGC7
 
@@ -94,6 +97,25 @@ try:
                 self.reset_dma_TCD(i)
 
         def DMA_TCD(self, dma_channel):
+            '''
+            Parameters
+            ----------
+            dma_channel : int
+                DMA channel for which to read the Transfer Control Descriptor.
+
+            Returns
+            -------
+            pandas.DataFrame
+                Table of Transfer Control Descriptor fields with corresponding
+                values.
+
+                In addition, several reference columns are included.  For
+                example, the ``page`` column indicates the page in the
+                [reference manual][1] where the respective register field is
+                described.
+
+            [1]: http://www.freescale.com/products/arm-processors/kinetis-cortex-m/adc-calculator:ADC_CALCULATOR
+            '''
             from arduino_rpc.protobuf import resolve_field_values
             import arduino_helpers.hardware.teensy.dma as dma
             from .DMA import TCD
@@ -106,6 +128,19 @@ try:
                     .sort_values(['page','full_name']))
 
         def DMA_registers(self):
+            '''
+            Returns
+            -------
+            pandas.DataFrame
+                Table of DMA configuration fields with corresponding values.
+
+                In addition, several reference columns are included.  For
+                example, the ``page`` column indicates the page in the
+                [reference manual][1] where the respective register field is
+                described.
+
+            [1]: http://www.freescale.com/products/arm-processors/kinetis-cortex-m/adc-calculator:ADC_CALCULATOR
+            '''
             from arduino_rpc.protobuf import resolve_field_values
             import arduino_helpers.hardware.teensy.dma as dma
             from .DMA import Registers
@@ -125,18 +160,33 @@ try:
 
             See 21.3.17/415 in the [manual][1] for more details.
 
+            Parameters
+            ----------
+            tcd_msg : teensy_minimal_rpc.DMA.TCD
+                Transfer Control Descriptor Protocol Buffer message.
+
+            Returns
+            -------
+            numpy.ndarray(dtype=TCD_RECORD_DTYPE)
+                Raw Transfer Control Descriptor structure (i.e., 32 bytes
+                starting from ``SADDR`` field) as a :class:`numpy.ndarray` of
+                type :data:`TCD_RECORD_DTYPE`.
+
+            See also
+            --------
+            :meth:`tcd_struct_to_msg`
+
             [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
             '''
             # Copy TCD to device so that we can extract the raw bytes from
             # device memory (raw TCD bytes are read into `tcd0`.
             #
-            # __TODO__:
+            # **TODO**:
             #  - Modify `TeensyMinimalRpc/DMA.h::serialize_TCD` and
             #  `TeensyMinimalRpc/DMA.h::update_TCD` functions to work offline.
             #      * Operate on variable by reference, on-device use actual register.
             #  - Add `arduino_helpers.hardware.teensy` function to convert
             #    between TCD protobuf message and binary TCD struct.
-
             self.update_dma_TCD(0, tcd_msg)
             return (self.mem_cpy_device_to_host(HW_TCDS_ADDR, 32)
                     .view(TCD_RECORD_DTYPE)[0])
@@ -144,21 +194,38 @@ try:
         def tcd_struct_to_msg(self, tcd_struct):
             '''
             Convert Transfer Control Descriptor from raw structure (i.e., 32
-            bytes starting from `SADDR` field) to Protocol Buffer message
+            bytes starting from ``SADDR`` field) to Protocol Buffer message
             encoding.
 
             See 21.3.17/415 in the [manual][1] for more details.
+
+            Parameters
+            ----------
+            tcd_struct : numpy.ndarray
+                Raw Transfer Control Descriptor structure (i.e., 32 bytes
+                starting from ``SADDR`` field)
+
+            Returns
+            -------
+            teensy_minimal_rpc.DMA.TCD
+                Transfer Control Descriptor Protocol Buffer message.
+
+            See also
+            --------
+            :meth:`tcd_msg_to_struct`
 
             [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
             '''
             from .DMA import TCD
 
-            # Copy TCD structure to device so that we can extract the serialized protocol
-            # buffer representation from the device.
+            # Copy TCD structure to device so that we can extract the
+            # serialized protocol buffer representation from the device.
             #
-            # __TODO__:
+            # **TODO**:
             #  - Modify `TeensyMinimalRpc/DMA.h::serialize_TCD` and
-            #    `TeensyMinimalRpc/DMA.h::update_TCD` functions to work offline.
+            #    `TeensyMinimalRpc/DMA.h::update_TCD` functions to operate on
+            #    arbitrary source address (instead of hard-coded address of TCD
+            #    register).
             #      * Operate on variable by reference, on-device use actual register.
             #  - Add `arduino_helpers.hardware.teensy` function to convert between TCD
             #    protobuf message and binary TCD struct.
@@ -178,28 +245,66 @@ try:
             matching the specified requirements.
             **TODO** Should this be handled differently?
 
+            This function uses the following mutator methods:
+
+             - :meth:`setReference` (C++)
+                 * Set the reference voltage based on whether or not
+                   differential is selected.
+
+                   On the Teensy 3.2 architecture, the 1.2V reference voltage
+                   *must* be used when operating in differential (as opposed to
+                   singled-ended) mode.
+
+             - :meth:`update_adc_registers` (C++)
+                 * Apply ADC ``CFG*`` register settings.
+
+                   ADC ``CFG*`` register settings are determined by:
+
+                     - :data:`average_count`
+                     - :data:`differential`
+                     - :data:`gain_power` (PGA only)
+                     - :data:`resolution`
+                     - :data:`sampling_rate_hz`
+
+             - :meth:`setAveraging` (C++)
+                 * Apply ADC hardware averaging setting using Teensy ADC
+                   library API.
+
+                   We use the Teensy API here because it handles calibration,
+                   etc. automatically.
+
+             - :meth:`setResolution` (C++)
+                 * Apply ADC resolution setting using Teensy ADC library API.
+
+                   We use the Teensy API here because it handles calibration,
+                   etc. automatically.
+
             Parameters
             ----------
             adc_channel : string
-                ADC channel to measure (e.g., `'A0'`, `'PGA0'`, etc.).
+                ADC channel to measure (e.g., ``'A0'``, ``'PGA0'``, etc.).
             sample_count : int
                 Number of samples to measure.
-            resolution : int
+            resolution : int,optional
                 Bit resolution to sample at.  Must be one of: 8, 10, 12, 16.
-            average_count : int
+            average_count : int,optional
                 Hardware average count.
-            sampling_rate_hz : int
+            sampling_rate_hz : int,optional
                 Sampling rate.  If not specified, sampling rate will be based
                 on minimum conversion rate based on remaining ADC settings.
-            differential : bool
-                If `True`, use differential mode.  Otherwise, use single-ended
+            differential : bool,optional
+                If ``True``, use differential mode.  Otherwise, use single-ended
                 mode.
-            gain_power : int
-                When measuring a `'PGA*'` channel (also implies differential
-                mode), apply a gain of `2^gain_power` using the hardware
+                .. note::
+                    **Differential mode** is automatically enabled for ``PGA*``
+                    measurements (e.g., :data:`adc_channel=='PGA0'`).
+            gain_power : int,optional
+                When measuring a ``'PGA*'`` channel (also implies differential
+                mode), apply a gain of ``2^gain_power`` using the hardware
                 programmable amplifier gain.
-            adc_num : int
-                The ADC to use for the measurement (default is `teensy.ADC_0`).
+            adc_num : int,optional
+                The ADC to use for the measurement (default is
+                ``teensy.ADC_0``).
 
             Returns
             -------
@@ -211,7 +316,7 @@ try:
                 Voltage readings (based on reference voltage and gain).
             df_adc_results : pandas.DataFrame
                 Raw ADC values (range depends on resolution, i.e.,
-                `adc_settings['Bit-width']`).
+                ``adc_settings['Bit-width']``).
             '''
             from .adc_sampler import AdcSampler, DEFAULT_ADC_CONFIGS
             import teensy_minimal_rpc.ADC as ADC
@@ -309,14 +414,6 @@ try:
             self.setAveraging(average_count, adc_num)
             self.setResolution(resolution, adc_num)
 
-            # Create `AdcSampler` for:
-            #  - The specified sample count.
-            #  - The specified channel.
-            #      * **N.B.,** The `AdcSampler` supports scanning multiple
-            #        channels, but in this function, we're only reading from a
-            #        single channel.
-            channels = [adc_channel]
-
             if sampling_rate_hz is None:
                 # By default, use a sampling rate that is 90% of the maximum
                 # conversion rate for the selected ADC settings.
@@ -331,10 +428,22 @@ try:
                 sampling_rate_hz = (int(.9 * adc_settings.conversion_rate) &
                                     0xFFFFFFFE)
 
+            # Create `AdcSampler` for:
+            #  - The specified sample count.
+            #  - The specified channel.
+            #      * **N.B.,** The `AdcSampler` supports scanning multiple
+            #        channels, but in this function, we're only reading from a
+            #        single channel.
+            channels = [adc_channel]
+
+            # **Creation of `AdcSampler` object initializes DMA-related
+            # registers**.
             adc_sampler = AdcSampler(self, channels, sample_count)
             adc_sampler.reset()
             adc_sampler.start_read(sampling_rate_hz)
             dtype = 'int16' if differential else 'uint16'
+            # **TODO** We should probably *explicitly* wait until read is done.
+            # (or stream?).
             df_adc_results = adc_sampler.get_results().astype(dtype)
             df_volts = reference_V * (df_adc_results /
                                     (1 << (resolution +
