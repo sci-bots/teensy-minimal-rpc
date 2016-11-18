@@ -21,6 +21,9 @@ def test_rms():
 
 
 def check_rms(N, auto_mean):
+    '''
+    Compare teensy root mean square vs numpy calculation.
+    '''
     data = np.arange(N)
     data_mean = data.mean()
     py_rms = np.sqrt(np.sum(((data - data_mean) ** 2)) / N)
@@ -41,9 +44,11 @@ def check_rms(N, auto_mean):
 
         for i in xrange(0, int(np.ceil(2 * N / float(CHUNK_SIZE)))):
             proxy.mem_cpy_host_to_device(data_addr + (CHUNK_SIZE * i),
-                                        np.arange(CHUNK_SIZE * i / 2,
-                                                min(CHUNK_SIZE * (i + 1) / 2, N),
-                                                dtype='uint16').view('uint8'))
+                                         np.arange(CHUNK_SIZE * i / 2,
+                                                   min(CHUNK_SIZE * (i + 1) /
+                                                       2, N),
+                                                   dtype='uint16')
+                                         .view('uint8'))
 
         teensy_rms = rms_func(data_addr, N)
         assert(np.isclose(py_rms, teensy_rms))
