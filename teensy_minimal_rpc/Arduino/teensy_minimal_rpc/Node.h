@@ -1,6 +1,7 @@
 #ifndef ___NODE__H___
 #define ___NODE__H___
 
+#include <math.h>
 #include <string.h>
 #include <stdint.h>
 #include <Arduino.h>
@@ -206,7 +207,18 @@ public:
     return compute_timestamp_us(adc_SYST_CVR_, adc_millis_);
   }
   uint16_t analog_input_to_digital_pin(uint16_t pin) { return analogInputToDigitalPin(pin); }
-  uint32_t benchmark_flops(uint32_t N) {
+  uint32_t benchmark_flops_us(uint32_t N) {
+    /*
+     * Parameters
+     * ----------
+     * N : uint32_t
+     *     Number of floating point operations to perform.
+     *
+     * Returns
+     * -------
+     * uint32_t
+     *     Number of microseconds to perform ``N`` floating point operations.
+     */
     float a = 1e6;
     float b = 1e7;
     uint32_t start = micros();
@@ -215,7 +227,18 @@ public:
     }
     return (micros() - start);
   }
-  uint32_t benchmark_iops(uint32_t N) {
+  uint32_t benchmark_iops_us(uint32_t N) {
+    /*
+     * Parameters
+     * ----------
+     * N : uint32_t
+     *     Number of integer operations to perform.
+     *
+     * Returns
+     * -------
+     * uint32_t
+     *     Number of microseconds to perform ``N`` integer operations.
+     */
     uint32_t a = 1e6;
     uint32_t b = 1e7;
     uint32_t start = micros();
@@ -232,6 +255,58 @@ public:
     return _millis * 1000 + ((current * (uint32_t)174763) >> 22);
 #endif
     return 1000 * (_millis + current * (1000. / F_CPU));
+  }
+  float compute_uint16_mean(uint32_t address, uint32_t size) {
+    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
+
+    float sum = 0;
+
+    for (uint16_t i = 0; i < size; i++) {
+      sum += data[i];
+    }
+    return sum / size;
+  }
+  float compute_uint16_rms(uint32_t address, uint32_t size,
+                           float mean) {
+    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
+    float sum_squared = 0;
+
+    for (uint16_t i = 0; i < size; i++) {
+      const float data_i = data[i] - mean;
+      sum_squared += data_i * data_i;
+    }
+
+    return sqrt(sum_squared / float(size));
+  }
+  float compute_uint16_rms_auto_mean(uint32_t address, uint32_t size) {
+    const float mean = compute_uint16_mean(address, size);
+    return compute_uint16_rms(address, size, mean);
+  }
+  float compute_int16_mean(uint32_t address, uint32_t size) {
+    const int16_t *data = reinterpret_cast<int16_t *>(address);
+
+    float sum = 0;
+
+    for (int16_t i = 0; i < size; i++) {
+      sum += data[i];
+    }
+    return sum / size;
+  }
+  float compute_int16_rms(uint32_t address, uint32_t size,
+                           float mean) {
+    const int16_t *data = reinterpret_cast<int16_t *>(address);
+    float sum_squared = 0;
+
+    for (int16_t i = 0; i < size; i++) {
+      const float data_i = data[i] - mean;
+      sum_squared += data_i * data_i;
+    }
+
+    return sqrt(sum_squared / float(size));
+  }
+  float compute_int16_rms_auto_mean(uint32_t address, uint32_t size) {
+    const float mean = compute_int16_mean(address, size);
+    return compute_int16_rms(address, size, mean);
   }
   uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
   uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
@@ -414,6 +489,7 @@ public:
     }
     free((void *)address);
   }
+  void reset_last_dma_channel_done() { last_dma_channel_done_ = -1; }
   void set_i2c_address(uint8_t value);  // Override to validate i2c address
   int8_t update_adc_registers(uint8_t adc_num, UInt8Array serialized_adc_msg) {
     return teensy::adc::update_registers(adc_num, serialized_adc_msg);
