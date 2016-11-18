@@ -207,7 +207,18 @@ public:
     return compute_timestamp_us(adc_SYST_CVR_, adc_millis_);
   }
   uint16_t analog_input_to_digital_pin(uint16_t pin) { return analogInputToDigitalPin(pin); }
-  uint32_t benchmark_flops(uint32_t N) {
+  uint32_t benchmark_flops_us(uint32_t N) {
+    /*
+     * Parameters
+     * ----------
+     * N : uint32_t
+     *     Number of floating point operations to perform.
+     *
+     * Returns
+     * -------
+     * uint32_t
+     *     Number of microseconds to perform ``N`` floating point operations.
+     */
     float a = 1e6;
     float b = 1e7;
     uint32_t start = micros();
@@ -216,7 +227,18 @@ public:
     }
     return (micros() - start);
   }
-  uint32_t benchmark_iops(uint32_t N) {
+  uint32_t benchmark_iops_us(uint32_t N) {
+    /*
+     * Parameters
+     * ----------
+     * N : uint32_t
+     *     Number of integer operations to perform.
+     *
+     * Returns
+     * -------
+     * uint32_t
+     *     Number of microseconds to perform ``N`` integer operations.
+     */
     uint32_t a = 1e6;
     uint32_t b = 1e7;
     uint32_t start = micros();
