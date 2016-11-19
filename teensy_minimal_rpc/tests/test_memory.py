@@ -93,3 +93,25 @@ def check_mem_fill(value):
         np.testing.assert_array_equal(device_data, value)
     finally:
         proxy.mem_free(data_addr)
+
+
+@nt.with_setup(setup_func, teardown_func)
+def test_str_echo():
+    '''
+    Test sending a string to device and back again.
+    '''
+    value = 'hello, world'
+    nt.eq_(proxy.str_echo(msg=value).tostring(), value)
+
+
+@nt.with_setup(setup_func, teardown_func)
+def test_echo_array():
+    '''
+    Test sending an array of unsigned 32-bit integers to device and back again.
+    '''
+    yield check_echo_array, np.arange(100, dtype='uint32')
+    yield check_echo_array, range(100)
+
+
+def check_echo_array(array):
+    np.testing.assert_array_equal(proxy.echo_array(array=array), array)
