@@ -29,10 +29,10 @@ def check_rms(N, auto_mean):
     py_rms = np.sqrt(np.sum(((data - data_mean) ** 2)) / N)
 
     if auto_mean:
-        rms_func = proxy.compute_uint16_rms_auto_mean
+        rms_func = proxy.compute_uint16_mean_sub_rms
     else:
-        rms_func = lambda *args: proxy.compute_uint16_rms(*(args +
-                                                            (data_mean, )))
+        rms_func = lambda *args: proxy.compute_uint16_sub_rms(*(args +
+                                                                (data_mean, )))
 
     # Select CHUNK_SIZE as a multiple of 2, allow up to 16 bytes for packet
     # header.
