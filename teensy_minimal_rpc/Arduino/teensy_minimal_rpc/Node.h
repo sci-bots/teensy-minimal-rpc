@@ -176,6 +176,19 @@ public:
       // DMA channel has completed.
       last_dma_channel_done_ = dma_channel_done_;
       dma_channel_done_ = -1;
+
+      UInt8Array message = get_buffer();
+      message.data[0] = 'h';
+      message.data[1] = 'e';
+      message.data[2] = 'l';
+      message.data[3] = 'l';
+      message.data[4] = 'o';
+      message.data[5] = '!';
+      message.data[6] = '\0';
+      message.length = 7;
+      serial_handler_.receiver_.write_f_(message,
+                                         Packet::packet_type::STREAM,
+                                         1234);
     }
   }
 
