@@ -108,6 +108,8 @@ public:
   bool adc_read_active_;
   LinkedList<uint32_t> allocations_;
   LinkedList<uint32_t> aligned_allocations_;
+  UInt8Array dma_data_;
+  uint16_t dma_stream_id_;
 
   Node()
     : BaseNode(),
@@ -120,8 +122,10 @@ public:
       adc_count_(0),
       dma_channel_done_(-1),
       last_dma_channel_done_(-1),
-      adc_read_active_(false) {
+      adc_read_active_(false),
+      dma_stream_id_(0) {
     pinMode(LED_BUILTIN, OUTPUT);
+    dma_data_ = UInt8Array_init_default();
   }
 
   void begin();
@@ -171,26 +175,45 @@ public:
     //adc_millis_ = millis();
     //adc_SYST_CVR_ = SYST_CVR;
   }
+  /** Start ADC DMA transfers and copy the result as a stream packet to the
+   * serial port when transfer has completed.
+   *
+   * \param pdb_config Programmable delay block status and control register
+   *                   configuration.
+   * \param addr Address to copy from after DMA transfer operations are
+   *             complete.
+   * \param size Number of bytes to copy to stream.
+   * \param stream_id Identifier for stream packet.
+   *
+   * \see #loop
+   */
+  void start_dma_adc(uint32_t pdb_config, uint32_t addr, uint32_t size,
+                     uint16_t stream_id) {
+    dma_data_ = UInt8Array_init(size, reinterpret_cast<uint8_t*>(addr));
+    dma_stream_id_ = stream_id;
+    /*
+     * Load configuration to Programmable Delay Block to start periodic ADC
+     * reads.
+     */
+    PDB0_SC = pdb_config;
+  }
+  /** Called periodically from the main program loop. */
   void loop() {
     if (dma_channel_done_ >= 0) {
       // DMA channel has completed.
       last_dma_channel_done_ = dma_channel_done_;
       dma_channel_done_ = -1;
 
-      UInt8Array message = get_buffer();
-      message.data[0] = 'h';
-      message.data[1] = 'e';
-      message.data[2] = 'l';
-      message.data[3] = 'l';
-      message.data[4] = 'o';
-      message.data[5] = '!';
-      message.data[6] = '\0';
-      message.length = 7;
-      serial_handler_.receiver_.write_f_(message,
-                                         Packet::packet_type::STREAM,
-                                         1234);
+      // Copy DMA ADC data to serial port as a `STREAM` packet.
+      if (dma_data_.length > 0) {
+        serial_handler_.receiver_.write_f_(dma_data_,
+                                           Packet::packet_type::STREAM,
+                                           dma_stream_id_);
+      }
     }
   }
+  /** Returns current contents of DMA result buffer. */
+  UInt8Array dma_data() const { return dma_data_; }
 
   // ##########################################################################
   // # Accessor methods
