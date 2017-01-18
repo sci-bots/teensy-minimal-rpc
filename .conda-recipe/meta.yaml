@@ -13,14 +13,14 @@ package:
 
 requirements:
   build:
-    - base-node-rpc >=0.18.post12
+    - base-node-rpc >=0.20.0
     - future
     - paver
     - pip
     - python 2.7*
 
   run:
-    - base-node-rpc >=0.18.post12
+    - base-node-rpc >=0.20.0
     - python 2.7*
 
 about:
