@@ -8,6 +8,38 @@ except (ImportError, TypeError):
 from .proxy import Proxy, I2cProxy, SerialProxy
 
 
+def conda_prefix():
+    '''
+    Returns
+    -------
+    path_helpers.path
+        Path to Conda environment prefix corresponding to running Python
+        executable.
+
+        Return ``None`` if not running in a Conda environment.
+    '''
+    if any(['continuum analytics, inc.' in sys.version.lower(),
+            'conda' in sys.version.lower()]):
+        # Assume running under Conda.
+        if 'CONDA_PREFIX' in os.environ:
+            conda_prefix = ph.path(os.environ['CONDA_PREFIX'])
+        else:
+            # Infer Conda prefix as parent directory of Python executable.
+            conda_prefix = ph.path(sys.executable).parent.realpath()
+    else:
+        # Assume running under Conda.
+        conda_prefix = None
+    return conda_prefix
+
+
+def conda_arduino_include_path():
+    if platform.system() in ('Linux', 'Darwin'):
+        return conda_prefix().joinpath('include', 'Arduino')
+    elif platform.system() == 'Windows':
+        return conda_prefix().joinpath('Library', 'include', 'Arduino')
+    raise 'Unsupported platform: %s' % platform.system()
+
+
 def package_path():
     return path(__file__).parent
 
@@ -20,7 +52,7 @@ def get_sketch_directory():
 
 
 def get_lib_directory():
-    return package_path().joinpath('Arduino', 'library')
+    return package_path().joinpath('..', 'lib').realpath()
 
 
 def get_includes():
@@ -38,11 +70,7 @@ def get_includes():
         ...
 
     '''
-    import base_node_rpc
-
-    return ([get_sketch_directory()] +
-            list(get_lib_directory().walkdirs('src')) +
-            base_node_rpc.get_includes())
+    return list(conda_arduino_include_path().walkdirs('src'))
 
 
 def get_sources():
