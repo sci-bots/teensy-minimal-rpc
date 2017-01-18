@@ -10,10 +10,15 @@ docs/build
 dist/*
 build/*
 */*_pb2.py
+lib/TeensyMinimalRpc/library.properties
+lib/TeensyMinimalRpc/src/TeensyMinimalRpc.h
+lib/TeensyMinimalRpc/src/TeensyMinimalRpc/*_pb.*
+lib/TeensyMinimalRpc/src/TeensyMinimalRpc/Properties.h
+lib/TeensyMinimalRpc/src/TeensyMinimalRpc/Commands.h
+lib/TeensyMinimalRpc/src/TeensyMinimalRpc/CommandProcessor.h
 */Arduino/*/*config_validate.h
 */Arduino/*/*state_validate.h
 */Arduino/*/*RPCBuffer.h
-*/Arduino/library
 */Arduino/*/NodeCommandProcessor.h
 *.o
 */protobuf/nano
