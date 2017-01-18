@@ -1,7 +1,14 @@
+import datetime as dt
+import logging
 import uuid
 
 from path_helpers import path
 import numpy as np
+
+
+logger = logging.getLogger(__name__)
+
+
 try:
     from base_node_rpc.proxy import ConfigMixinBase, StateMixinBase
     import arduino_helpers.hardware.teensy as teensy
@@ -65,6 +72,7 @@ try:
         def __init__(self, *args, **kwargs):
             super(ProxyMixin, self).__init__(*args, **kwargs)
             self.init_dma()
+            logger.debug('Initialized DMA')
 
         def init_dma(self):
             '''
@@ -232,13 +240,14 @@ try:
             self.mem_cpy_host_to_device(HW_TCDS_ADDR, tcd_struct.tostring())
             return TCD.FromString(self.read_dma_TCD(0).tostring())
 
-        def analog_reads(self, adc_channel, sample_count, resolution=None,
-                         average_count=1, sampling_rate_hz=None,
-                         differential=False, gain_power=0,
-                         adc_num=teensy.ADC_0):
+        def analog_reads_config(self, adc_channel, sample_count,
+                                resolution=None, average_count=1,
+                                sampling_rate_hz=None, differential=False,
+                                gain_power=0, adc_num=teensy.ADC_0):
             '''
-            Read multiple samples from a single ADC channel, using the minimum
-            conversion rate for specified sampling parameters.
+            Configure ADC sampler to read multiple samples from a single ADC
+            channel, using the minimum conversion rate for specified sampling
+            parameters.
 
             The reasoning behind selecting the minimum conversion rate is that
             we expect it to lead to the lowest noise possible while still
@@ -312,11 +321,18 @@ try:
                 Number of samples per second.
             adc_settings : pandas.Series
                 ADC settings used.
-            df_volts : pandas.DataFrame
-                Voltage readings (based on reference voltage and gain).
-            df_adc_results : pandas.DataFrame
-                Raw ADC values (range depends on resolution, i.e.,
-                ``adc_settings['Bit-width']``).
+            adc_sampler : teensy_minimal_rpc.adc_sampler.AdcSampler
+                An ADC sampler object.
+
+                Calls to the
+                :meth:`teensy_minimal_rpc.adc_sampler.AdcSampler.start_read`
+                method asynchronously initiate reading of the configured
+                channels/sample count, at a specified sampling rate.
+
+                The
+                :meth:`teensy_minimal_rpc.adc_sampler.AdcSampler.get_results_async`
+                method may be called to fetch results from a previously
+                initiated read operation.
             '''
             from .adc_sampler import AdcSampler, DEFAULT_ADC_CONFIGS
             import teensy_minimal_rpc.ADC as ADC
@@ -379,6 +395,11 @@ try:
             else:
                 self.setReference(teensy.ADC_REF_3V3, adc_num)
                 reference_V = 3.3
+
+            adc_settings['reference_V'] = reference_V
+            adc_settings['resolution'] = resolution
+            adc_settings['differential'] = differential
+
             # Verify that a valid gain value has been specified.
             assert(gain_power >= 0 and gain_power < 8)
             adc_settings['gain_power'] = int(gain_power)
@@ -439,16 +460,85 @@ try:
             # **Creation of `AdcSampler` object initializes DMA-related
             # registers**.
             adc_sampler = AdcSampler(self, channels, sample_count)
-            adc_sampler.reset()
-            adc_sampler.start_read(sampling_rate_hz)
-            dtype = 'int16' if differential else 'uint16'
-            # **TODO** We should probably *explicitly* wait until read is done.
-            # (or stream?).
-            df_adc_results = adc_sampler.get_results().astype(dtype)
-            df_volts = reference_V * (df_adc_results /
-                                    (1 << (resolution +
-                                           adc_settings.gain_power)))
-            return sampling_rate_hz, adc_settings, df_volts, df_adc_results
+            return sampling_rate_hz, adc_settings, adc_sampler
+
+        def analog_reads(self, adc_channel, sample_count, resolution=None,
+                         average_count=1, sampling_rate_hz=None,
+                         differential=False, gain_power=0,
+                         adc_num=teensy.ADC_0, timeout_s=None):
+            '''
+            Read multiple samples from a single ADC channel, using the minimum
+            conversion rate for specified sampling parameters.
+
+            Parameters
+            ----------
+            adc_channel : string
+                ADC channel to measure (e.g., ``'A0'``, ``'PGA0'``, etc.).
+            sample_count : int
+                Number of samples to measure.
+            resolution : int,optional
+                Bit resolution to sample at.  Must be one of: 8, 10, 12, 16.
+            average_count : int,optional
+                Hardware average count.
+            sampling_rate_hz : int,optional
+                Sampling rate.  If not specified, sampling rate will be based
+                on minimum conversion rate based on remaining ADC settings.
+            differential : bool,optional
+                If ``True``, use differential mode.  Otherwise, use single-ended
+                mode.
+                .. note::
+                    **Differential mode** is automatically enabled for ``PGA*``
+                    measurements (e.g., :data:`adc_channel=='PGA0'`).
+            gain_power : int,optional
+                When measuring a ``'PGA*'`` channel (also implies differential
+                mode), apply a gain of ``2^gain_power`` using the hardware
+                programmable amplifier gain.
+            adc_num : int,optional
+                The ADC to use for the measurement (default is
+                ``teensy.ADC_0``).
+
+            Returns
+            -------
+            sampling_rate_hz : int
+                Number of samples per second.
+            adc_settings : pandas.Series
+                ADC settings used.
+            df_volts : pandas.DataFrame
+                Voltage readings (based on reference voltage and gain).
+            df_adc_results : pandas.DataFrame
+                Raw ADC values (range depends on resolution, i.e.,
+                ``adc_settings['Bit-width']``).
+
+            See also
+            --------
+            :meth:`analog_reads_config`
+            '''
+            sample_rate_hz, adc_settings, adc_sampler = \
+                self.analog_reads_config(adc_channel, sample_count,
+                                         resolution=resolution,
+                                         average_count=average_count,
+                                         sampling_rate_hz=sampling_rate_hz,
+                                         differential=differential,
+                                         gain_power=gain_power,
+                                         adc_num=adc_num)
+            adc_sampler.start_read(sample_rate_hz=sample_rate_hz)
+            start_time = dt.datetime.now()
+            while self._packet_watcher.queues.stream.qsize() < 1:
+                if (timeout_s is not None and (timeout_s <
+                                               (dt.datetime.now() -
+                                                start_time).total_seconds())):
+                    raise IOError('Timed out waiting for streamed result.')
+            df_adc_results = adc_sampler.get_results_async()
+            return (sample_rate_hz, adc_settings) + \
+                self.format_adc_results(df_adc_results, adc_settings)
+
+        def format_adc_results(self, df_adc_results, adc_settings):
+            dtype = 'int16' if adc_settings.differential else 'uint16'
+            df_adc_results = df_adc_results.astype(dtype)
+            scale = adc_settings.reference_V / (1 << (adc_settings.resolution +
+                                                      adc_settings.gain_power))
+            df_volts = scale * df_adc_results
+            return df_volts, df_adc_results
 
 
     class Proxy(ProxyMixin, _Proxy):

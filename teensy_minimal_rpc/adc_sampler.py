@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
+import Queue
+import datetime as dt
+import weakref
+
 import numpy as np
 import pandas as pd
 import arduino_helpers.hardware.teensy.adc as adc
@@ -88,7 +93,9 @@ class AdcSampler(object):
     '''
     def __init__(self, proxy, channels, sample_count,
                  dma_channels=None, adc_number=teensy.ADC_0):
-        self.proxy = proxy
+        # Use weak reference to prevent zombie `proxy` staying alive even after
+        # deleting the original `proxy` reference.
+        self.proxy = weakref.ref(proxy)
         self.channels = channels
         # The number of samples to record for each ADC channel.
         self.sample_count = sample_count
@@ -105,14 +112,16 @@ class AdcSampler(object):
                                       dtype='uint32')
 
         # Enable PDB clock (DMA and ADC clocks should already be enabled).
-        self.proxy.update_sim_SCGC6(SIM.R_SCGC6(PDB=True))
+        self.proxy().update_sim_SCGC6(SIM.R_SCGC6(PDB=True))
 
         self.allocate_device_arrays()
         self.reset()
 
         self.configure_adc()
-        self.configure_timer(1)
+        # self.configure_timer(1)
+        self.configure_dma()
 
+    def configure_dma(self):
         self.configure_dma_channel_adc_conversion_mux()
         self.assert_no_dma_error()
 
@@ -129,10 +138,11 @@ class AdcSampler(object):
         self.assert_no_dma_error()
 
     def assert_no_dma_error(self):
-        df_dma_registers = self.proxy.DMA_registers()
-        assert(df_dma_registers.loc[df_dma_registers
-                                    .full_name == 'ERR',
-                                    'value'].sum() == 0)
+        df_dma_registers = self.proxy().DMA_registers()
+        df_errors = df_dma_registers.loc[(df_dma_registers.full_name == 'ERR')
+                                         & (df_dma_registers.value > 0)]
+        if df_errors.shape[0] > 0:
+            raise IOError('One or more DMA errors occurred.\n%s' % df_errors)
 
     def allocate_device_arrays(self):
         '''
@@ -173,25 +183,25 @@ class AdcSampler(object):
         self.allocs = pd.Series()
 
         # Allocate device memory for results from single ADC scan.
-        self.allocs['scan_result'] = self.proxy.mem_alloc(self.N)
+        self.allocs['scan_result'] = self.proxy().mem_alloc(self.N)
 
         # Allocate and copy channel SC1A configurations to device memory.
-        self.allocs['sc1as'] = (self.proxy
+        self.allocs['sc1as'] = (self.proxy()
                                 .mem_aligned_alloc_and_set(4,
                                                            self.channel_sc1as
                                                            .view('uint8')))
 
         # Allocate device memory for sample buffer for each
         # ADC channel.
-        self.allocs['samples'] = self.proxy.mem_alloc(self.sample_count *
-                                                      self.N)
+        self.allocs['samples'] = self.proxy().mem_alloc(self.sample_count *
+                                                        self.N)
 
-        # Allocate device memory for DMA TCD configurations.
-        # __N.B.,__ Transfer control descriptors are 32 bytes each
-        # and MUST be aligned to 0-modulo-32 address.
-        self.allocs['tcds'] = self.proxy.mem_aligned_alloc(32,
-                                                           self.sample_count *
-                                                           32)
+        # Allocate device memory for DMA TCD configurations. __N.B.,__ Transfer
+        # control descriptors are 32 bytes each and MUST be aligned to
+        # 0-modulo-32 address.
+        self.allocs['tcds'] = self.proxy().mem_aligned_alloc(32,
+                                                             self.sample_count
+                                                             * 32)
         # Store list of device TCD configuration addresses.
         self.tcd_addrs = [self.allocs.tcds + 32 * i
                           for i in xrange(self.sample_count)]
@@ -208,9 +218,9 @@ class AdcSampler(object):
         --------
         :meth:`allocate_device_arrays`
         '''
-        self.proxy.mem_fill_uint8(self.allocs.scan_result, 0, self.N)
-        self.proxy.mem_fill_uint8(self.allocs.samples, 0,
-                                  self.sample_count * self.N)
+        self.proxy().mem_fill_uint8(self.allocs.scan_result, 0, self.N)
+        self.proxy().mem_fill_uint8(self.allocs.samples, 0, self.sample_count *
+                                    self.N)
 
     def configure_dma_channel_adc_channel_configs(self):
         '''
@@ -247,8 +257,8 @@ class AdcSampler(object):
                     DLASTSGA=0,
                     CSR=DMA.R_TCD_CSR(START=0, DONE=False))
 
-        self.proxy.update_dma_TCD(self.dma_channels.adc_channel_configs,
-                                  sca1_tcd_msg)
+        self.proxy().update_dma_TCD(self.dma_channels.adc_channel_configs,
+                                    sca1_tcd_msg)
 
     def configure_dma_channel_adc_channel_configs_mux(self):
         '''
@@ -270,16 +280,15 @@ class AdcSampler(object):
         '''
         # Configure DMA channel `i` enable to use MUX triggering from
         # programmable delay block.
-        self.proxy.update_dma_mux_chcfg(self.dma_channels.adc_channel_configs,
-                                        DMA.MUX_CHCFG(SOURCE=
-                                                      dma.DMAMUX_SOURCE_PDB,
-                                                      TRIG=False,
-                                                      ENBL=True))
+        self.proxy().update_dma_mux_chcfg(self.dma_channels.adc_channel_configs,
+                                          DMA.MUX_CHCFG(SOURCE=
+                                                        dma.DMAMUX_SOURCE_PDB,
+                                                        TRIG=False, ENBL=True))
 
         # Set enable request for DMA channel `i`.
         #
         # [1]: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
-        self.proxy.update_dma_registers(
+        self.proxy().update_dma_registers(
             DMA.Registers(SERQ=int(self.dma_channels.adc_channel_configs)))
 
     def configure_dma_channel_adc_conversion_mux(self):
@@ -297,7 +306,7 @@ class AdcSampler(object):
 
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
-        self.proxy.update_dma_mux_chcfg(
+        self.proxy().update_dma_mux_chcfg(
             self.dma_channels.adc_conversion,
             DMA.MUX_CHCFG(
                 # Route ADC0 as DMA channel source.
@@ -308,7 +317,7 @@ class AdcSampler(object):
         # Update ADC0_SC2 to enable DMA and assert the ADC DMA request during
         # an ADC conversion complete event noted when any of the `SC1n[COCO]`
         # (i.e., conversion complete) flags is asserted.
-        self.proxy.enableDMA(teensy.ADC_0)
+        self.proxy().enableDMA(teensy.ADC_0)
 
     def configure_dma_channel_adc_conversion(self):
         '''
@@ -373,12 +382,12 @@ class AdcSampler(object):
                               MAJORLINKCH=
                               int(self.dma_channels.scatter)))
 
-        self.proxy.update_dma_TCD(self.dma_channels.adc_conversion, tcd_msg)
+        self.proxy().update_dma_TCD(self.dma_channels.adc_conversion, tcd_msg)
 
         # DMA request input signals and this enable request flag
         # must be asserted before a channel’s hardware service
         # request is accepted (21.3.3/394).
-        self.proxy.update_dma_registers(
+        self.proxy().update_dma_registers(
             DMA.Registers(SERQ=int(self.dma_channels.adc_conversion)))
 
     def configure_dma_channel_scatter(self):
@@ -423,7 +432,7 @@ class AdcSampler(object):
 
         # Convert Protocol Buffer encoded TCD to bytes structure (see
         # `TCD_RECORD_DTYPE`).
-        tcd0 = self.proxy.tcd_msg_to_struct(tcd0_msg)
+        tcd0 = self.proxy().tcd_msg_to_struct(tcd0_msg)
 
         # Create binary TCD struct for each TCD protobuf message and copy to
         # device memory.
@@ -443,16 +452,16 @@ class AdcSampler(object):
                 # Last sample, so trigger major loop interrupt
                 tcd_i['CSR'] |= (1 << 1)  # Set `INTMAJOR` (21.3.29/426)
             # Copy TCD for sample number `i` to device.
-            self.proxy.mem_cpy_host_to_device(self.tcd_addrs[i],
-                                              tcd_i.tostring())
+            self.proxy().mem_cpy_host_to_device(self.tcd_addrs[i],
+                                                tcd_i.tostring())
 
         # Load initial TCD in scatter chain to DMA channel chosen to handle
         # scattering.
-        self.proxy.mem_cpy_host_to_device(self.hw_tcd_addrs
-                                          [self.dma_channels.scatter],
-                                          tcd0.tostring())
+        self.proxy().mem_cpy_host_to_device(self.hw_tcd_addrs
+                                            [self.dma_channels.scatter],
+                                            tcd0.tostring())
         # Attach interrupt handler to scatter DMA channel.
-        self.proxy.attach_dma_interrupt(self.dma_channels.scatter)
+        self.proxy().attach_dma_interrupt(self.dma_channels.scatter)
 
     def configure_adc(self):
         '''
@@ -476,7 +485,7 @@ class AdcSampler(object):
 
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
-        self.proxy.update_adc_registers(
+        self.proxy().update_adc_registers(
             self.adc_number,
             ADC.Registers(CFG2=ADC.R_CFG2(MUXSEL=ADC.R_CFG2.B)))
 
@@ -511,15 +520,15 @@ class AdcSampler(object):
         '''
         # Set PDB interrupt to occur when IDLY is equal to CNT + 1.
         # PDB0_IDLY = 1
-        self.proxy.mem_cpy_host_to_device(pdb.PDB0_IDLY,
-                                          np.uint32(1).tostring())
+        self.proxy().mem_cpy_host_to_device(pdb.PDB0_IDLY,
+                                            np.uint32(1).tostring())
 
         clock_divide = pdb.get_pdb_divide_params(sample_rate_hz).iloc[0]
 
         # PDB0_MOD = (uint16_t)(mod-1);
-        self.proxy.mem_cpy_host_to_device(pdb.PDB0_MOD,
-                                          np.uint32(clock_divide.clock_mod)
-                                          .tostring())
+        self.proxy().mem_cpy_host_to_device(pdb.PDB0_MOD,
+                                            np.uint32(clock_divide.clock_mod)
+                                            .tostring())
 
         PDB_CONFIG = (pdb.PDB_SC_TRGSEL(15)  # Software trigger
                       | pdb.PDB_SC_PDBEN  # Enable PDB
@@ -529,9 +538,8 @@ class AdcSampler(object):
                       | pdb.PDB_SC_MULT(clock_divide.mult_)
                       | pdb.PDB_SC_DMAEN  # Enable DMA
                       | pdb.PDB_SC_LDOK)  # Load all new values
-        self.proxy.mem_cpy_host_to_device(pdb.PDB0_SC,
-                                          np.uint32(PDB_CONFIG)
-                                          .tostring())
+        self.proxy().mem_cpy_host_to_device(pdb.PDB0_SC, np.uint32(PDB_CONFIG)
+                                            .tostring())
         return PDB_CONFIG
 
     def start_read(self, sample_rate_hz):
@@ -568,13 +576,14 @@ class AdcSampler(object):
 
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
-        self.proxy.attach_dma_interrupt(self.dma_channels.scatter)
+        self.proxy().attach_dma_interrupt(self.dma_channels.scatter)
         pdb_config = self.configure_timer(sample_rate_hz)
         pdb_config |= pdb.PDB_SC_SWTRIG  # Start the counter.
 
         # Copy configured PDB register state to device hardware register.
-        self.proxy.mem_cpy_host_to_device(pdb.PDB0_SC, np.uint32(pdb_config)
-                                          .tostring())
+        self.proxy().start_dma_adc(np.uint32(pdb_config), self.allocs.samples,
+                                   self.sample_count * self.N, 1234)
+        self.sample_rate_hz = sample_rate_hz
 
         # **N.B.,** Timer will be stopped by the scatter DMA channel major loop
         # interrupt handler after `sample_count` samples have been collected.
@@ -594,13 +603,41 @@ class AdcSampler(object):
             **TODO** Provide mechanism to poll status of previously started
             read.
         '''
-        data = self.proxy.mem_cpy_device_to_host(self.allocs.samples,
-                                                 self.sample_count * self.N)
+        data = self.proxy().mem_cpy_device_to_host(self.allocs.samples,
+                                                   self.sample_count * self.N)
         df_adc_results = pd.DataFrame(data.view('uint16')
                                       .reshape(-1, self.sample_count).T,
                                       columns=self.channels)
         return df_adc_results
 
+    def get_results_async(self):
+        '''
+        Returns
+        -------
+        pandas.DataFrame
+            Table containing :attr:`sample_count` ADC readings for each analog
+            input channel.
+
+        Notes
+        -----
+            **Does not guarantee result is ready!**
+        '''
+        try:
+            datetime_i, packet_i = (self.proxy()._packet_watcher.queues.stream
+                                    .get_nowait())
+        except Queue.Empty:
+            return pd.DataFrame(None, columns=self.channels)
+        else:
+            datetimes_i = [datetime_i + dt.timedelta(seconds=t_j)
+                           for t_j in np.arange(self.sample_count) * 1 /
+                           self.sample_rate_hz]
+            df_adc_results = pd.DataFrame(np.fromstring(packet_i.data(),
+                                                        dtype='uint16')
+                                          .reshape(-1, self.sample_count).T,
+                                          columns=self.channels,
+                                          index=datetimes_i)
+            return df_adc_results
+
     def __del__(self):
-        self.allocs[['scan_result', 'samples']].map(self.proxy.mem_free)
-        self.allocs[['sc1as', 'tcds']].map(self.proxy.mem_aligned_free)
+        self.allocs[['scan_result', 'samples']].map(self.proxy().mem_free)
+        self.allocs[['sc1as', 'tcds']].map(self.proxy().mem_aligned_free)

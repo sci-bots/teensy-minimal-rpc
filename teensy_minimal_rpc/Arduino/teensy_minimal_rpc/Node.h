@@ -10,12 +10,13 @@
 #include "RPCBuffer.h"  // Define packet sizes
 #include "TeensyMinimalRpc/Properties.h"  // Define package name, URL, etc.
 #include <BaseNodeRpc/BaseNode.h>
+#include <BaseNodeRpc/BaseNodeConfig.h>
 #include <BaseNodeRpc/BaseNodeEeprom.h>
 #include <BaseNodeRpc/BaseNodeI2c.h>
-#include <BaseNodeRpc/BaseNodeConfig.h>
-#include <BaseNodeRpc/BaseNodeState.h>
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
+#include <BaseNodeRpc/BaseNodeState.h>
+#include <BaseNodeRpc/BaseRootMeanSquare.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <RingBufferDMA.h>
@@ -33,7 +34,6 @@
 #include "teensy_minimal_rpc_state_validate.h"
 #include "TeensyMinimalRpc/config_pb.h"
 #include "TeensyMinimalRpc/state_pb.h"
-#include "TeensyMinimalRpc/RootMeanSquare.hpp"
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
 
@@ -84,7 +84,8 @@ class Node :
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,
 #endif  // #ifndef DISABLE_SERIAL
-  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t> {
+  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t>,
+  public BaseRootMeanSquare {
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
@@ -292,44 +293,6 @@ public:
     return _millis * 1000 + ((current * (uint32_t)174763) >> 22);
 #endif
     return 1000 * (_millis + current * (1000. / F_CPU));
-  }
-
-  /****************************************************************************
-   * Root mean square
-   * ----------------
-   *
-   * When measuring analog signals, particularly at high sampling rates, it is
-   * often more practical to aggregate signal readings into fewer readings to
-   * reduce the amount of data recorded or transmitted back to the host.
-   *
-   * The root mean square value of a periodic waveform is related to its power.
-   *
-   * **TODO** Explain mean subtracted root mean square
-   *
-   ***************************************************************************/
-  float compute_uint16_mean(uint32_t address, uint32_t size) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_mean(data, size);
-  }
-  float compute_uint16_mean_sub_rms(uint32_t address, uint32_t size) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_mean_sub_rms(data, size);
-  }
-  float compute_uint16_sub_rms(uint32_t address, uint32_t size, float bias) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_sub_rms(data, size, bias);
-  }
-  float compute_int16_mean(uint32_t address, uint32_t size) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_mean(data, size);
-  }
-  float compute_int16_mean_sub_rms(uint32_t address, uint32_t size) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_mean_sub_rms(data, size);
-  }
-  float compute_int16_sub_rms(uint32_t address, uint32_t size, float bias) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_sub_rms(data, size, bias);
   }
 
   uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
