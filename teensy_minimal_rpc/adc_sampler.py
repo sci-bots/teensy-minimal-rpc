@@ -553,7 +553,7 @@ class AdcSampler(object):
                                             .tostring())
         return PDB_CONFIG
 
-    def start_read(self, sample_rate_hz):
+    def start_read(self, sample_rate_hz, stream_id=0):
         '''
         Trigger start of ADC sampling at the specified sampling rate.
 
@@ -579,9 +579,17 @@ class AdcSampler(object):
         ----------
         sample_rate_hz : int
             Sample rate in Hz.
+        stream_id : int, optional
+            Stream identifier.
+
+            May be passed to :method:`get_results_async` to filter related DMA data.
 
         See also
         --------
+
+        :method:`get_results`
+        :method:`get_results_async`
+
         Section **ADC Status and Control Registers 1 (ADCx_SC1n) (31.3.1/653)**
         in `K20P64M72SF1RM`_ manual.
 
@@ -593,11 +601,8 @@ class AdcSampler(object):
 
         # Copy configured PDB register state to device hardware register.
         self.proxy().start_dma_adc(np.uint32(pdb_config), self.allocs.samples,
-                                   self.sample_count * self.N, 1234)
+                                   self.sample_count * self.N, stream_id)
         self.sample_rate_hz = sample_rate_hz
-
-        # **N.B.,** Timer will be stopped by the scatter DMA channel major loop
-        # interrupt handler after `sample_count` samples have been collected.
 
     def get_results(self):
         '''
@@ -621,33 +626,44 @@ class AdcSampler(object):
                                       columns=self.channels)
         return df_adc_results
 
-    def get_results_async(self):
+    def get_results_async(self, stream_id=None):
         '''
         Returns
         -------
         pandas.DataFrame
             Table containing :attr:`sample_count` ADC readings for each analog
-            input channel.
+            input channel, indexed by:
+
+             - ADC DMA stream identifier (i.e., ``stream_id``).
+             - Measurement timestamp.
 
         Notes
         -----
             **Does not guarantee result is ready!**
         '''
-        try:
-            datetime_i, packet_i = (self.proxy()._packet_watcher.queues.stream
-                                    .get_nowait())
-        except Queue.Empty:
-            return pd.DataFrame(None, columns=self.channels)
-        else:
+        stream_queue = self.proxy()._packet_watcher.queues.stream
+        frames = []
+        packet_count = stream_queue.qsize()
+        for i in xrange(packet_count):
+            datetime_i, packet_i = stream_queue.get_nowait()
+            if stream_id is not None and stream_id != packet_i.iuid:
+                # Packet does not match specified stream ID.
+                stream_queue.put_nowait((datetime_i, packet_i))
+                continue
             datetimes_i = [datetime_i + dt.timedelta(seconds=t_j)
-                           for t_j in np.arange(self.sample_count) * 1 /
-                           self.sample_rate_hz]
-            df_adc_results = pd.DataFrame(np.fromstring(packet_i.data(),
-                                                        dtype='uint16')
-                                          .reshape(-1, self.sample_count).T,
-                                          columns=self.channels,
-                                          index=datetimes_i)
-            return df_adc_results
+                           for t_j in np.arange(self.sample_count) *
+                           1. / self.sample_rate_hz]
+            df_adc_results_i = pd.DataFrame(np.fromstring(packet_i.data(),
+                                                          dtype='uint16')
+                                            .reshape(-1, self.sample_count).T,
+                                            columns=self.channels,
+                                            index=datetimes_i)
+            df_adc_results_i.insert(0, 'stream_id', packet_i.iuid)
+            frames.append(df_adc_results_i)
+        if not frames:
+            return pd.DataFrame(None, columns=self.channels)
+        return (pd.concat(frames).set_index('stream_id', append=True)
+                .reorder_levels(['stream_id', 0]))
 
     def __del__(self):
         self.allocs[['scan_result', 'samples']].map(self.proxy().mem_free)
