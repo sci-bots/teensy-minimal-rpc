@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
 import datetime as dt
+import types
 import weakref
 
 import numpy as np
@@ -106,6 +107,9 @@ class AdcSampler(object):
         # Use weak reference to prevent zombie `proxy` staying alive even after
         # deleting the original `proxy` reference.
         self.proxy = weakref.ref(proxy)
+        if isinstance(channels, types.StringTypes):
+            # Single channel was specified.  Wrap channel in list.
+            channels = [channels]
         self.channels = channels
         # The number of samples to record for each ADC channel.
         self.sample_count = sample_count
@@ -128,7 +132,6 @@ class AdcSampler(object):
         self.reset()
 
         self.configure_adc()
-        # self.configure_timer(1)
         self.configure_dma()
 
     def configure_dma(self):
@@ -581,7 +584,8 @@ class AdcSampler(object):
         stream_id : int, optional
             Stream identifier.
 
-            May be passed to :method:`get_results_async` to filter related DMA data.
+            May be passed to :method:`get_results_async` to filter related DMA
+            data.
 
         See also
         --------
@@ -840,7 +844,7 @@ class AdcDmaMixin(object):
         self.mem_cpy_host_to_device(HW_TCDS_ADDR, tcd_struct.tostring())
         return TCD.FromString(self.read_dma_TCD(0).tostring())
 
-    def analog_reads_config(self, adc_channel, sample_count,
+    def analog_reads_config(self, adc_channels, sample_count,
                             resolution=None, average_count=1,
                             sampling_rate_hz=None, differential=False,
                             gain_power=0, adc_num=teensy.ADC_0):
@@ -890,8 +894,10 @@ class AdcDmaMixin(object):
 
         Parameters
         ----------
-        adc_channel : string
+        adc_channels : string or list
             ADC channel to measure (e.g., ``'A0'``, ``'PGA0'``, etc.).
+
+            Multiple channels may be specified to perform interleaved reads.
         sample_count : int
             Number of samples to measure.
         resolution : int,optional
@@ -943,7 +949,15 @@ class AdcDmaMixin(object):
         # count).
         bit_width = resolution
 
-        if 'PGA' in adc_channel:
+        if isinstance(adc_channels, types.StringTypes):
+            # Single channel was specified.  Wrap channel in list.
+            adc_channels = [adc_channels]
+
+        # Enable programmable gain if `'PGA'` is part of any selected channel
+        # name.
+        enabled_programmable_gain = any('PGA' in channel_i
+                                        for channel_i in adc_channels)
+        if enabled_programmable_gain:
             differential = True
 
         if differential:
@@ -1022,7 +1036,7 @@ class AdcDmaMixin(object):
                                      int(adc_settings['CFG1[ADICLK]']),
                                      ADIV=
                                      int(adc_settings['CFG1[ADIV]'])))
-        if 'PGA' in adc_channel:
+        if enabled_programmable_gain:
             adc_registers.PGA.PGAG = adc_settings.gain_power
             adc_registers.PGA.PGAEN = True
 
@@ -1039,7 +1053,7 @@ class AdcDmaMixin(object):
             # By default, use a sampling rate that is 90% of the maximum
             # conversion rate for the selected ADC settings.
             #
-            # **TODO** We arrived at this after a handful of empirical
+            # XXX We arrived at this after a handful of empirical
             # tests. We think this is necessary due to the slight deviation
             # of the computed conversion rates (see TODO in
             # `adc_sampler.get_adc_configs`) from those computed by the
@@ -1055,14 +1069,13 @@ class AdcDmaMixin(object):
         #      * **N.B.,** The `AdcSampler` supports scanning multiple
         #        channels, but in this function, we're only reading from a
         #        single channel.
-        channels = [adc_channel]
 
         # **Creation of `AdcSampler` object initializes DMA-related
         # registers**.
-        adc_sampler = AdcSampler(self, channels, sample_count)
+        adc_sampler = AdcSampler(self, adc_channels, sample_count)
         return sampling_rate_hz, adc_settings, adc_sampler
 
-    def analog_reads(self, adc_channel, sample_count, resolution=None,
+    def analog_reads(self, adc_channels, sample_count, resolution=None,
                      average_count=1, sampling_rate_hz=None,
                      differential=False, gain_power=0,
                      adc_num=teensy.ADC_0, timeout_s=None):
@@ -1072,8 +1085,10 @@ class AdcDmaMixin(object):
 
         Parameters
         ----------
-        adc_channel : string
+        adc_channels : string or list
             ADC channel to measure (e.g., ``'A0'``, ``'PGA0'``, etc.).
+
+            Multiple channels may be specified to perform interleaved reads.
         sample_count : int
             Number of samples to measure.
         resolution : int,optional
@@ -1114,7 +1129,7 @@ class AdcDmaMixin(object):
         :meth:`analog_reads_config`
         '''
         sample_rate_hz, adc_settings, adc_sampler = \
-            self.analog_reads_config(adc_channel, sample_count,
+            self.analog_reads_config(adc_channels, sample_count,
                                      resolution=resolution,
                                      average_count=average_count,
                                      sampling_rate_hz=sampling_rate_hz,
@@ -1130,12 +1145,31 @@ class AdcDmaMixin(object):
                 raise IOError('Timed out waiting for streamed result.')
         df_adc_results = adc_sampler.get_results_async()
         return (sample_rate_hz, adc_settings) + \
-            self.format_adc_results(df_adc_results, adc_settings)
+            format_adc_results(df_adc_results, adc_settings)
 
-    def format_adc_results(self, df_adc_results, adc_settings):
-        dtype = 'int16' if adc_settings.differential else 'uint16'
-        df_adc_results = df_adc_results.astype(dtype)
-        scale = adc_settings.reference_V / (1 << (adc_settings.resolution +
-                                                  adc_settings.gain_power))
-        df_volts = scale * df_adc_results
-        return df_volts, df_adc_results
+
+def format_adc_results(df_adc_results, adc_settings):
+    '''
+    Convert raw ADC readings to actual voltages.
+
+    Parameters
+    ----------
+    adc_settings : pandas.Series
+        ADC settings used.
+    df_adc_results : pandas.DataFrame
+        Raw ADC values (range depends on resolution, i.e.,
+        ``adc_settings['Bit-width']``).
+
+    Returns
+    -------
+    df_volts : pandas.DataFrame
+        Voltage readings (based on reference voltage and gain).
+    df_adc_results : pandas.DataFrame
+        Raw ADC values (from input argument).
+    '''
+    dtype = 'int16' if adc_settings.differential else 'uint16'
+    df_adc_results = df_adc_results.astype(dtype)
+    scale = adc_settings.reference_V / (1 << (adc_settings.resolution +
+                                                adc_settings.gain_power))
+    df_volts = scale * df_adc_results
+    return df_volts, df_adc_results
