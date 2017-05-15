@@ -587,6 +587,12 @@ class AdcSampler(object):
             May be passed to :method:`get_results_async` to filter related DMA
             data.
 
+        Returns
+        -------
+        AdcSampler
+            Returns reference to ``self`` to enable method call chaining, e.g.,
+            ``adc_sampler.start_read(...).get_results_async(...)``.
+
         See also
         --------
 
@@ -606,6 +612,7 @@ class AdcSampler(object):
         self.proxy().start_dma_adc(np.uint32(pdb_config), self.allocs.samples,
                                    self.sample_count * self.N, stream_id)
         self.sample_rate_hz = sample_rate_hz
+        return self
 
     def get_results(self):
         '''
@@ -629,7 +636,7 @@ class AdcSampler(object):
                                       columns=self.channels)
         return df_adc_results
 
-    def get_results_async(self, stream_id=None):
+    def get_results_async(self, stream_id=None, timeout_s=None):
         '''
         Returns
         -------
@@ -1170,6 +1177,6 @@ def format_adc_results(df_adc_results, adc_settings):
     dtype = 'int16' if adc_settings.differential else 'uint16'
     df_adc_results = df_adc_results.astype(dtype)
     scale = adc_settings.reference_V / (1 << (adc_settings.resolution +
-                                                adc_settings.gain_power))
+                                              adc_settings.gain_power))
     df_volts = scale * df_adc_results
     return df_volts, df_adc_results
