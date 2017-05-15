@@ -557,6 +557,10 @@ class AdcSampler(object):
 
     def start_read(self, sample_rate_hz, stream_id=0):
         '''
+        **TODO** Throw exception if previous read has not completed yet.
+        Otherwise, this method may clobber a currently running DMA ADC read
+        operation, potentially rendering the microcontroller unresponsive.
+
         Trigger start of ADC sampling at the specified sampling rate.
 
          1. Start PDB timer according to specified sample rate (in Hz).
@@ -636,7 +640,7 @@ class AdcSampler(object):
                                       columns=self.channels)
         return df_adc_results
 
-    def get_results_async(self, stream_id=None, timeout_s=None):
+    def get_results_async(self, timeout_s=None):
         '''
         Returns
         -------
@@ -653,13 +657,18 @@ class AdcSampler(object):
         '''
         stream_queue = self.proxy()._packet_watcher.queues.stream
         frames = []
+
+        start_time = dt.datetime.now()
+        while stream_queue.qsize() < 1:
+            if (timeout_s is not None and (timeout_s <
+                                           (dt.datetime.now() -
+                                            start_time).total_seconds())):
+                raise IOError('Timed out waiting for streamed result.')
+
+        # At least one packet is available in the ADC stream queue.
         packet_count = stream_queue.qsize()
         for i in xrange(packet_count):
             datetime_i, packet_i = stream_queue.get_nowait()
-            if stream_id is not None and stream_id != packet_i.iuid:
-                # Packet does not match specified stream ID.
-                stream_queue.put_nowait((datetime_i, packet_i))
-                continue
             datetimes_i = [datetime_i + dt.timedelta(seconds=t_j)
                            for t_j in np.arange(self.sample_count) *
                            1. / self.sample_rate_hz]
@@ -668,10 +677,9 @@ class AdcSampler(object):
                                             .reshape(-1, self.sample_count).T,
                                             columns=self.channels,
                                             index=datetimes_i)
+            # Mark the frame with the corresponding stream identifier.
             df_adc_results_i.insert(0, 'stream_id', packet_i.iuid)
             frames.append(df_adc_results_i)
-        if not frames:
-            return pd.DataFrame(None, columns=self.channels)
         return (pd.concat(frames).set_index('stream_id', append=True)
                 .reorder_levels(['stream_id', 0]))
 
