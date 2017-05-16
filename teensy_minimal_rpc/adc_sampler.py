@@ -573,7 +573,7 @@ class AdcSampler(object):
                       | pdb.PDB_SC_LDOK)  # Load all new values
         return PDB_CONFIG
 
-    def start_read(self, sample_rate_hz, stream_id=0):
+    def start_read(self, sample_rate_hz=None, stream_id=0):
         '''
         **TODO** Throw exception if previous read has not completed yet.
         Otherwise, this method may clobber a currently running DMA ADC read
@@ -601,8 +601,10 @@ class AdcSampler(object):
 
         Parameters
         ----------
-        sample_rate_hz : int
+        sample_rate_hz : int, optional
             Sample rate in Hz.
+
+            If not specified, use ``sample_rate_hz`` setting from previous call.
         stream_id : int, optional
             Stream identifier.
 
@@ -627,6 +629,10 @@ class AdcSampler(object):
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
         self.proxy().attach_dma_interrupt(self.dma_channels.scatter)
+        if sample_rate_hz is None and self.sample_rate_hz is None:
+            raise ValueError('No cached sampling rate available.  Must specify'
+                             ' `sample_rate_hz` (can be omitted on subsequent '
+                             'calls).')
         self.sample_rate_hz = sample_rate_hz
 
         # Copy configured PDB register state to device hardware register.
