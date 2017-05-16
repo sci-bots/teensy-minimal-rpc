@@ -133,6 +133,26 @@ class AdcSampler(object):
 
         self.configure_adc()
         self.configure_dma()
+        self._sample_rate_hz = None
+        self._pdb_config = None
+
+    @property
+    def sample_rate_hz(self):
+        return self._sample_rate_hz
+
+    @sample_rate_hz.setter
+    def sample_rate_hz(self, value):
+        if self.sample_rate_hz != value:
+            self._sample_rate_hz = value
+            self.pdb_config = self.configure_timer(self._sample_rate_hz)
+
+    @property
+    def pdb_config(self):
+        return self._pdb_config
+
+    @pdb_config.setter
+    def pdb_config(self, value):
+        self._pdb_config = np.uint32(value)
 
     def configure_dma(self):
         self.configure_dma_channel_adc_conversion_mux()
@@ -505,7 +525,7 @@ class AdcSampler(object):
     def configure_timer(self, sample_rate_hz):
         '''
         Configure programmable delay block according to specified sampling
-        rate.
+        rate, but **do not** copy configuration to ``PDB_CONFIG`` register.
 
         Notes
         -----
@@ -551,8 +571,6 @@ class AdcSampler(object):
                       | pdb.PDB_SC_MULT(clock_divide.mult_)
                       | pdb.PDB_SC_DMAEN  # Enable DMA
                       | pdb.PDB_SC_LDOK)  # Load all new values
-        self.proxy().mem_cpy_host_to_device(pdb.PDB0_SC, np.uint32(PDB_CONFIG)
-                                            .tostring())
         return PDB_CONFIG
 
     def start_read(self, sample_rate_hz, stream_id=0):
@@ -609,13 +627,11 @@ class AdcSampler(object):
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
         self.proxy().attach_dma_interrupt(self.dma_channels.scatter)
-        pdb_config = self.configure_timer(sample_rate_hz)
-        pdb_config |= pdb.PDB_SC_SWTRIG  # Start the counter.
+        self.sample_rate_hz = sample_rate_hz
 
         # Copy configured PDB register state to device hardware register.
-        self.proxy().start_dma_adc(np.uint32(pdb_config), self.allocs.samples,
+        self.proxy().start_dma_adc(self.pdb_config, self.allocs.samples,
                                    self.sample_count * self.N, stream_id)
-        self.sample_rate_hz = sample_rate_hz
         return self
 
     def get_results(self):
