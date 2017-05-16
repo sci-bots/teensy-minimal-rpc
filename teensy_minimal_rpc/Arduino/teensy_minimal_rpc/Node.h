@@ -10,12 +10,13 @@
 #include "RPCBuffer.h"  // Define packet sizes
 #include "TeensyMinimalRpc/Properties.h"  // Define package name, URL, etc.
 #include <BaseNodeRpc/BaseNode.h>
+#include <BaseNodeRpc/BaseNodeConfig.h>
 #include <BaseNodeRpc/BaseNodeEeprom.h>
 #include <BaseNodeRpc/BaseNodeI2c.h>
-#include <BaseNodeRpc/BaseNodeConfig.h>
-#include <BaseNodeRpc/BaseNodeState.h>
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
+#include <BaseNodeRpc/BaseNodeState.h>
+#include <BaseNodeRpc/BaseRootMeanSquare.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <RingBufferDMA.h>
@@ -33,7 +34,6 @@
 #include "teensy_minimal_rpc_state_validate.h"
 #include "TeensyMinimalRpc/config_pb.h"
 #include "TeensyMinimalRpc/state_pb.h"
-#include "TeensyMinimalRpc/RootMeanSquare.hpp"
 
 const uint32_t ADC_BUFFER_SIZE = 4096;
 
@@ -84,7 +84,8 @@ class Node :
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,
 #endif  // #ifndef DISABLE_SERIAL
-  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t> {
+  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t>,
+  public BaseRootMeanSquare {
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
@@ -108,6 +109,8 @@ public:
   bool adc_read_active_;
   LinkedList<uint32_t> allocations_;
   LinkedList<uint32_t> aligned_allocations_;
+  UInt8Array dma_data_;
+  uint16_t dma_stream_id_;
 
   Node()
     : BaseNode(),
@@ -120,8 +123,10 @@ public:
       adc_count_(0),
       dma_channel_done_(-1),
       last_dma_channel_done_(-1),
-      adc_read_active_(false) {
+      adc_read_active_(false),
+      dma_stream_id_(0) {
     pinMode(LED_BUILTIN, OUTPUT);
+    dma_data_ = UInt8Array_init_default();
   }
 
   void begin();
@@ -171,13 +176,45 @@ public:
     //adc_millis_ = millis();
     //adc_SYST_CVR_ = SYST_CVR;
   }
+  /** Start ADC DMA transfers and copy the result as a stream packet to the
+   * serial port when transfer has completed.
+   *
+   * \param pdb_config Programmable delay block status and control register
+   *                   configuration.
+   * \param addr Address to copy from after DMA transfer operations are
+   *             complete.
+   * \param size Number of bytes to copy to stream.
+   * \param stream_id Identifier for stream packet.
+   *
+   * \see #loop
+   */
+  void start_dma_adc(uint32_t pdb_config, uint32_t addr, uint32_t size,
+                     uint16_t stream_id) {
+    dma_data_ = UInt8Array_init(size, reinterpret_cast<uint8_t*>(addr));
+    dma_stream_id_ = stream_id;
+    /*
+     * Load configuration to Programmable Delay Block to start periodic ADC
+     * reads.
+     */
+    PDB0_SC = pdb_config;
+  }
+  /** Called periodically from the main program loop. */
   void loop() {
     if (dma_channel_done_ >= 0) {
       // DMA channel has completed.
       last_dma_channel_done_ = dma_channel_done_;
       dma_channel_done_ = -1;
+
+      // Copy DMA ADC data to serial port as a `STREAM` packet.
+      if (dma_data_.length > 0) {
+        serial_handler_.receiver_.write_f_(dma_data_,
+                                           Packet::packet_type::STREAM,
+                                           dma_stream_id_);
+      }
     }
   }
+  /** Returns current contents of DMA result buffer. */
+  UInt8Array dma_data() const { return dma_data_; }
 
   // ##########################################################################
   // # Accessor methods
@@ -256,44 +293,6 @@ public:
     return _millis * 1000 + ((current * (uint32_t)174763) >> 22);
 #endif
     return 1000 * (_millis + current * (1000. / F_CPU));
-  }
-
-  /****************************************************************************
-   * Root mean square
-   * ----------------
-   *
-   * When measuring analog signals, particularly at high sampling rates, it is
-   * often more practical to aggregate signal readings into fewer readings to
-   * reduce the amount of data recorded or transmitted back to the host.
-   *
-   * The root mean square value of a periodic waveform is related to its power.
-   *
-   * **TODO** Explain mean subtracted root mean square
-   *
-   ***************************************************************************/
-  float compute_uint16_mean(uint32_t address, uint32_t size) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_mean(data, size);
-  }
-  float compute_uint16_mean_sub_rms(uint32_t address, uint32_t size) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_mean_sub_rms(data, size);
-  }
-  float compute_uint16_sub_rms(uint32_t address, uint32_t size, float bias) {
-    const uint16_t *data = reinterpret_cast<uint16_t *>(address);
-    return compute_sub_rms(data, size, bias);
-  }
-  float compute_int16_mean(uint32_t address, uint32_t size) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_mean(data, size);
-  }
-  float compute_int16_mean_sub_rms(uint32_t address, uint32_t size) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_mean_sub_rms(data, size);
-  }
-  float compute_int16_sub_rms(uint32_t address, uint32_t size, float bias) {
-    const int16_t *data = reinterpret_cast<int16_t *>(address);
-    return compute_sub_rms(data, size, bias);
   }
 
   uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
