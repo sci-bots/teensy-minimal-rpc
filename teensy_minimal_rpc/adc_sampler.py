@@ -630,8 +630,12 @@ class AdcSampler(object):
         self.sample_rate_hz = sample_rate_hz
 
         # Copy configured PDB register state to device hardware register.
-        self.proxy().start_dma_adc(self.pdb_config, self.allocs.samples,
-                                   self.sample_count * self.N, stream_id)
+        result = self.proxy().start_dma_adc(self.pdb_config,
+                                            self.allocs.samples,
+                                            self.sample_count * self.N,
+                                            stream_id)
+        if not result:
+            raise RuntimeError('Previous DMA ADC operation in progress.')
         return self
 
     def get_results(self):
