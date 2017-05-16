@@ -677,6 +677,7 @@ class AdcSampler(object):
                                             .reshape(-1, self.sample_count).T,
                                             columns=self.channels,
                                             index=datetimes_i)
+            df_adc_results_i.index.name = 'timestamp'
             # Mark the frame with the corresponding stream identifier.
             df_adc_results_i.insert(0, 'stream_id', packet_i.iuid)
             frames.append(df_adc_results_i)
