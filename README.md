@@ -1,6 +1,4 @@
 
-![https://ci.appveyor.com/api/projects/status/github/wheeler-microfluidics/teensy-minimal-rpc?branch=master&svg=true](https://ci.appveyor.com/api/projects/status/github/wheeler-microfluidics/teensy-minimal-rpc?branch=master&svg=true)
-
 
 ![https://ci.appveyor.com/api/projects/status/github/wheeler-microfluidics/teensy-minimal-rpc?branch=master&svg=true](https://ci.appveyor.com/api/projects/status/github/wheeler-microfluidics/teensy-minimal-rpc?branch=master&svg=true)
 # teensy-minimal-rpc #
