@@ -16,7 +16,6 @@
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/BaseNodeState.h>
-#include <BaseNodeRpc/BaseRootMeanSquare.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <RingBufferDMA.h>
@@ -26,6 +25,7 @@
 #include <TeensyMinimalRpc/SIM.h>  // System integration module (clock gating)
 #include <TeensyMinimalRpc/PIT.h>  // Programmable interrupt timer
 #include <TeensyMinimalRpc/aligned_alloc.h>
+#include <TeensyMinimalRpc/RootMeanSquare.h>
 #include <pb_eeprom.h>
 #include <pb_validate.h>
 #include <pb_cpp_api.h>

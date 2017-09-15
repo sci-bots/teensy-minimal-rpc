@@ -41,18 +41,18 @@ def conda_arduino_include_path():
 
 
 def package_path():
-    return path(__file__).parent
+    return path(__file__).realpath().parent
 
 
 def get_sketch_directory():
     '''
     Return directory containing the Arduino sketch.
     '''
-    return package_path().joinpath('Arduino', package_path().name)
+    return package_path().joinpath('..', 'src')
 
 
 def get_lib_directory():
-    return package_path().joinpath('..', 'lib').realpath()
+    return package_path().joinpath('..', 'lib')
 
 
 def get_includes():
