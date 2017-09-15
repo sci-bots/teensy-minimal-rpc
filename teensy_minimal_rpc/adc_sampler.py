@@ -4,14 +4,14 @@ import datetime as dt
 import types
 import weakref
 
-import numpy as np
-import pandas as pd
+import arduino_helpers.hardware.teensy as teensy
 import arduino_helpers.hardware.teensy.adc as adc
 import arduino_helpers.hardware.teensy.dma as dma
 import arduino_helpers.hardware.teensy.pdb as pdb
-import arduino_helpers.hardware.teensy as teensy
+import numpy as np
+import pandas as pd
+import path_helpers as ph
 import teensy_minimal_rpc.DMA as DMA
-import teensy_minimal_rpc.ADC as ADC
 import teensy_minimal_rpc.SIM as SIM
 
 
@@ -33,12 +33,12 @@ def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
     might be some edge cases where inappropriate ADC settings may be chosen as
     a result.
     '''
-    from . import package_path
+    package_path = ph.path(__file__).realpath().parent
 
     # Read serialized (HDF) table of all possible ADC configurations (not all
     # valid).
-    df_adc_configs = pd.read_hdf(package_path().joinpath('static', 'data',
-                                                         'adc_configs.h5'))
+    df_adc_configs = pd.read_hdf(package_path.joinpath('static', 'data',
+                                                       'adc_configs.h5'))
 
     df_adc_configs = (df_adc_configs
                       .loc[(df_adc_configs['CFG2[ADACKEN]'] == 0) &
@@ -518,6 +518,8 @@ class AdcSampler(object):
 
         .. _K20P64M72SF1RM: https://www.pjrc.com/teensy/K20P64M72SF1RM.pdf
         '''
+        import teensy_minimal_rpc.ADC as ADC
+
         self.proxy().update_adc_registers(
             self.adc_number,
             ADC.Registers(CFG2=ADC.R_CFG2(MUXSEL=ADC.R_CFG2.B)))
@@ -982,7 +984,8 @@ class AdcDmaMixin(object):
             method may be called to fetch results from a previously
             initiated read operation.
         '''
-        from .adc_sampler import AdcSampler, DEFAULT_ADC_CONFIGS
+        # XXX Import here, since importing at top of file seems to cause a
+        # cyclic import error when importing `__init__`.
         import teensy_minimal_rpc.ADC as ADC
 
         # Select ADC settings to achieve minimum conversion rate for
@@ -1017,8 +1020,8 @@ class AdcDmaMixin(object):
         mode = 'differential' if differential else 'single-ended'
 
         # Build up a query mask based on specified options.
-        query = ((DEFAULT_ADC_CONFIGS.AverageNum == average_count)
-                & (DEFAULT_ADC_CONFIGS.Mode == mode))
+        query = ((DEFAULT_ADC_CONFIGS.AverageNum == average_count) &
+                 (DEFAULT_ADC_CONFIGS.Mode == mode))
         if resolution is not None:
             query &= (DEFAULT_ADC_CONFIGS['Bit-width'] == bit_width)
         if sampling_rate_hz is not None:

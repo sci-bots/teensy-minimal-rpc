@@ -16,7 +16,6 @@
 #include <BaseNodeRpc/BaseNodeI2cHandler.h>
 #include <BaseNodeRpc/BaseNodeSerialHandler.h>
 #include <BaseNodeRpc/BaseNodeState.h>
-#include <BaseNodeRpc/BaseRootMeanSquare.h>
 #include <BaseNodeRpc/SerialHandler.h>
 #include <ADC.h>
 #include <RingBufferDMA.h>
@@ -84,8 +83,7 @@ class Node :
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,
 #endif  // #ifndef DISABLE_SERIAL
-  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t>,
-  public BaseRootMeanSquare {
+  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t> {
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
@@ -297,7 +295,6 @@ public:
 
   uint16_t digital_pin_has_pwm(uint16_t pin) { return digitalPinHasPWM(pin); }
   uint16_t digital_pin_to_interrupt(uint16_t pin) { return digitalPinToInterrupt(pin); }
-  uint32_t dma_available() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->available(); }
   uint16_t dma_channel_count() { return DMA_NUM_CHANNELS; }
   bool dma_empty() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isEmpty(); }
   bool dma_full() { return (dmaBuffer_ == NULL) ? 0 : dmaBuffer_->isFull(); }
@@ -358,26 +355,6 @@ public:
 
   // ##########################################################################
   // # Mutator methods
-  UInt16Array adc_read() {
-    adc_read_active_ = true;
-    UInt8Array byte_buffer = get_buffer();
-    UInt16Array result;
-    result.data = reinterpret_cast<uint16_t *>(byte_buffer.data);
-    //result.length = dmaBuffer_->available();
-    result.length = dmaBuffer_->available() + (sizeof(uint32_t) /
-                                               sizeof(uint16_t));
-    uint32_t &adc_count = *(reinterpret_cast<uint32_t *>(result.data));
-    adc_count = adc_count_;
-    adc_count_ = 0;
-
-    uint16_t i = 0;
-    for (i = 0; i < result.length; i++) {
-      //result.data[i] = dmaBuffer_->read();
-      result.data[i + 2] = dmaBuffer_->read();
-    }
-    adc_read_active_ = false;
-    return result;
-  }
   void attach_dma_interrupt(uint8_t dma_channel) {
     void (*isr)(void);
     switch(dma_channel) {
