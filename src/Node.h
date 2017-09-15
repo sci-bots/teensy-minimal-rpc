@@ -25,7 +25,6 @@
 #include <TeensyMinimalRpc/SIM.h>  // System integration module (clock gating)
 #include <TeensyMinimalRpc/PIT.h>  // Programmable interrupt timer
 #include <TeensyMinimalRpc/aligned_alloc.h>
-#include <TeensyMinimalRpc/RootMeanSquare.h>
 #include <pb_eeprom.h>
 #include <pb_validate.h>
 #include <pb_cpp_api.h>
@@ -84,8 +83,7 @@ class Node :
 #ifndef DISABLE_SERIAL
   public BaseNodeSerialHandler,
 #endif  // #ifndef DISABLE_SERIAL
-  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t>,
-  public BaseRootMeanSquare {
+  public BaseNodeI2cHandler<base_node_rpc::i2c_handler_t> {
 public:
   typedef PacketParser<FixedPacket> parser_t;
 
