@@ -35,10 +35,10 @@ def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
     '''
     package_path = ph.path(__file__).realpath().parent
 
-    # Read serialized (HDF) table of all possible ADC configurations (not all
+    # Read serialized (CSV) table of all possible ADC configurations (not all
     # valid).
-    df_adc_configs = pd.read_hdf(package_path.joinpath('static', 'data',
-                                                       'adc_configs.h5'))
+    df_adc_configs = pd.read_csv(package_path.joinpath('static', 'data',
+                                                       'adc_configs.csv'))
 
     df_adc_configs = (df_adc_configs
                       .loc[(df_adc_configs['CFG2[ADACKEN]'] == 0) &
