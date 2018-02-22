@@ -49,6 +49,8 @@ requirements:
     - pip
     #: .. versionchanged:: X.X.X
     - python
+    #: .. versionadded:: X.X.X
+    - six
 
   run:
     - base-node-rpc >=0.20.0
@@ -56,6 +58,8 @@ requirements:
     - conda-helpers
     #: .. versionchanged:: X.X.X
     - python
+    #: .. versionadded:: X.X.X
+    - six
 
 test:
   imports:
