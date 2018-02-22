@@ -54,5 +54,5 @@ requirements:
     - python
 
 about:
-  home: https://github.com/wheeler-microfluidics/teensy-minimal-rpc
+  home: https://github.com/sci-bots/{{ PKG_NAME }}
   license: MIT
