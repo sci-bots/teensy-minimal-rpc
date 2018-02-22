@@ -42,6 +42,8 @@ package:
 requirements:
   build:
     - base-node-rpc >=0.20.0
+    #: .. versionadded:: X.X.X
+    - conda-helpers
     - future
     - paver
     - pip
@@ -50,6 +52,8 @@ requirements:
 
   run:
     - base-node-rpc >=0.20.0
+    #: .. versionadded:: X.X.X
+    - conda-helpers
     #: .. versionchanged:: X.X.X
     - python
 
