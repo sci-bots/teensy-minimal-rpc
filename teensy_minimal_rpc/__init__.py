@@ -3,11 +3,17 @@ import platform
 
 from path_helpers import path
 import conda_helpers as ch
+
+from ._version import get_versions
 try:
     from .config import Config, State
 except (ImportError, TypeError):
     pass
 from .proxy import Proxy, I2cProxy, SerialProxy
+
+
+__version__ = get_versions()['version']
+del get_versions
 
 
 def conda_arduino_include_path():
