@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from collections import OrderedDict
 import sys
 from importlib import import_module

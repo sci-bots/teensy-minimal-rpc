@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import division
+from __future__ import absolute_import
 import datetime as dt
 import types
 import weakref
 
+from six.moves import range
 import arduino_helpers.hardware.teensy as teensy
 import arduino_helpers.hardware.teensy.adc as adc
 import arduino_helpers.hardware.teensy.dma as dma
@@ -11,6 +13,7 @@ import arduino_helpers.hardware.teensy.pdb as pdb
 import numpy as np
 import pandas as pd
 import path_helpers as ph
+import six
 import teensy_minimal_rpc.DMA as DMA
 import teensy_minimal_rpc.SIM as SIM
 
@@ -107,7 +110,7 @@ class AdcSampler(object):
         # Use weak reference to prevent zombie `proxy` staying alive even after
         # deleting the original `proxy` reference.
         self.proxy = weakref.ref(proxy)
-        if isinstance(channels, types.StringTypes):
+        if isinstance(channels, six.string_types):
             # Single channel was specified.  Wrap channel in list.
             channels = [channels]
         self.channels = channels
@@ -237,11 +240,11 @@ class AdcSampler(object):
                                                              * 32)
         # Store list of device TCD configuration addresses.
         self.tcd_addrs = [self.allocs.tcds + 32 * i
-                          for i in xrange(self.sample_count)]
+                          for i in range(self.sample_count)]
         # Store list of device TCD register addresses.
         # __N.B.,__ There are 16 DMA channels on the device.
         # __TODO__ Query `proxy` to determine number of DMA channels.
-        self.hw_tcd_addrs = [dma.HW_TCDS_ADDR + 32 * i for i in xrange(16)]
+        self.hw_tcd_addrs = [dma.HW_TCDS_ADDR + 32 * i for i in range(16)]
 
     def reset(self):
         '''
@@ -469,7 +472,7 @@ class AdcSampler(object):
 
         # Create binary TCD struct for each TCD protobuf message and copy to
         # device memory.
-        for i in xrange(self.sample_count):
+        for i in range(self.sample_count):
             tcd_i = tcd0.copy()
             # Copy from `scan_result` array.
             tcd_i['SADDR'] = self.allocs.scan_result
@@ -695,7 +698,7 @@ class AdcSampler(object):
 
         # At least one packet is available in the ADC stream queue.
         packet_count = stream_queue.qsize()
-        for i in xrange(packet_count):
+        for i in range(packet_count):
             datetime_i, packet_i = stream_queue.get_nowait()
             datetimes_i = [datetime_i + dt.timedelta(seconds=t_j)
                            for t_j in np.arange(self.sample_count) *
@@ -749,7 +752,7 @@ class AdcDmaMixin(object):
 
         # Reset all DMA transfer control descriptor registers (i.e., set to
         # 0).
-        for i in xrange(self.dma_channel_count()):
+        for i in range(self.dma_channel_count()):
             self.reset_dma_TCD(i)
 
     def DMA_TCD(self, dma_channel):
@@ -994,7 +997,7 @@ class AdcDmaMixin(object):
         # count).
         bit_width = resolution
 
-        if isinstance(adc_channels, types.StringTypes):
+        if isinstance(adc_channels, six.string_types):
             # Single channel was specified.  Wrap channel in list.
             adc_channels = [adc_channels]
 

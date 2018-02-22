@@ -26,6 +26,8 @@ It also creates a modules index (named modules.<suffix>).
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import optparse
 
@@ -56,9 +58,9 @@ def write_file(name, text, opts):
         return
     fname = os.path.join(opts.destdir, "%s.%s" % (name, opts.suffix))
     if not opts.force and os.path.isfile(fname):
-        print 'File %s already exists, skipping.' % fname
+        print('File %s already exists, skipping.' % fname)
     else:
-        print 'Creating file %s.' % fname
+        print('Creating file %s.' % fname)
         f = open(fname, 'w')
         f.write(text)
         f.close()
@@ -252,9 +254,9 @@ Note: By default this script will not overwrite already created files.""")
                 excludes = normalize_excludes(rootpath, excludes)
                 recurse_tree(rootpath, excludes, opts)
             else:
-                print '%s is not a valid output destination directory.' % opts.destdir
+                print('%s is not a valid output destination directory.' % opts.destdir)
         else:
-            print '%s is not a valid directory.' % rootpath
+            print('%s is not a valid directory.' % rootpath)
 
 
 if __name__ == '__main__':

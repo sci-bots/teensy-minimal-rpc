@@ -1,5 +1,8 @@
+from __future__ import absolute_import
 from nose.tools import with_setup, eq_
 import teensy_minimal_rpc as tr
+from six.moves import filter
+from six.moves import range
 
 
 def setup_func():
@@ -20,7 +23,7 @@ def test_has_pwm():
     # Teensy has [34 digital IO pins][1].
     #
     # [1]: https://www.pjrc.com/teensy/teensy31.html
-    pwm_pins = filter(lambda i: proxy.digital_pin_has_pwm(i), xrange(34))
+    pwm_pins = [i for i in range(34) if proxy.digital_pin_has_pwm(i)]
     eq_(pwm_pins, [3, 4, 5, 6, 9, 10, 20, 21, 22, 23, 25, 32])
 
 
