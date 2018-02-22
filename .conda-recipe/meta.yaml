@@ -53,6 +53,18 @@ requirements:
     #: .. versionchanged:: X.X.X
     - python
 
+test:
+  imports:
+    - teensy_minimal_rpc.ADC
+    - teensy_minimal_rpc.DMA
+    - teensy_minimal_rpc.PIT
+    - teensy_minimal_rpc.SIM
+    - teensy_minimal_rpc.adc_sampler
+    - teensy_minimal_rpc.config
+    - teensy_minimal_rpc.node
+    - teensy_minimal_rpc.proxy
+    - teensy_minimal_rpc.state
+
 about:
   home: https://github.com/sci-bots/{{ PKG_NAME }}
   license: MIT
