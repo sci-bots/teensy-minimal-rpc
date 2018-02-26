@@ -48,7 +48,7 @@ requirements:
     - paver
     - pip
     #: .. versionchanged:: X.X.X
-    - python
+    - python {{ python }}
     #: .. versionadded:: X.X.X
     - six
 
@@ -57,7 +57,7 @@ requirements:
     #: .. versionadded:: X.X.X
     - conda-helpers
     #: .. versionchanged:: X.X.X
-    - python
+    - python {{ python }}
     #: .. versionadded:: X.X.X
     - six
 
