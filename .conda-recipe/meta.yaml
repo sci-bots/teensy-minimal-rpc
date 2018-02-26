@@ -13,7 +13,7 @@
 source:
   git_url: ../
 
-#: .. versionadded:: X.X.X
+#: .. versionadded:: 0.7
 build:
   script:
     # Generate Arduino `library.properties` file
@@ -42,23 +42,23 @@ package:
 requirements:
   build:
     - base-node-rpc >=0.20.0
-    #: .. versionadded:: X.X.X
+    #: .. versionadded:: 0.7
     - conda-helpers
     - future
     - paver
     - pip
-    #: .. versionchanged:: X.X.X
+    #: .. versionchanged:: 0.7
     - python {{ python }}
-    #: .. versionadded:: X.X.X
+    #: .. versionadded:: 0.7
     - six
 
   run:
     - base-node-rpc >=0.20.0
-    #: .. versionadded:: X.X.X
+    #: .. versionadded:: 0.7
     - conda-helpers
-    #: .. versionchanged:: X.X.X
+    #: .. versionchanged:: 0.7
     - python {{ python }}
-    #: .. versionadded:: X.X.X
+    #: .. versionadded:: 0.7
     - six
 
 test:
