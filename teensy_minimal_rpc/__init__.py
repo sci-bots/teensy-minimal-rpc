@@ -1,6 +1,11 @@
+from __future__ import absolute_import
 from collections import OrderedDict
+import platform
 
 from path_helpers import path
+import conda_helpers as ch
+
+from ._version import get_versions
 try:
     from .config import Config, State
 except (ImportError, TypeError):
@@ -8,35 +13,15 @@ except (ImportError, TypeError):
 from .proxy import Proxy, I2cProxy, SerialProxy
 
 
-def conda_prefix():
-    '''
-    Returns
-    -------
-    path_helpers.path
-        Path to Conda environment prefix corresponding to running Python
-        executable.
-
-        Return ``None`` if not running in a Conda environment.
-    '''
-    if any(['continuum analytics, inc.' in sys.version.lower(),
-            'conda' in sys.version.lower()]):
-        # Assume running under Conda.
-        if 'CONDA_PREFIX' in os.environ:
-            conda_prefix = ph.path(os.environ['CONDA_PREFIX'])
-        else:
-            # Infer Conda prefix as parent directory of Python executable.
-            conda_prefix = ph.path(sys.executable).parent.realpath()
-    else:
-        # Assume running under Conda.
-        conda_prefix = None
-    return conda_prefix
+__version__ = get_versions()['version']
+del get_versions
 
 
 def conda_arduino_include_path():
     if platform.system() in ('Linux', 'Darwin'):
-        return conda_prefix().joinpath('include', 'Arduino')
+        return ch.conda_prefix().joinpath('include', 'Arduino')
     elif platform.system() == 'Windows':
-        return conda_prefix().joinpath('Library', 'include', 'Arduino')
+        return ch.conda_prefix().joinpath('Library', 'include', 'Arduino')
     raise 'Unsupported platform: %s' % platform.system()
 
 

@@ -1,3 +1,7 @@
+{% set PKG_NAME = 'teensy-minimal-rpc' %}
+{% set LIB_NAME = 'TeensyMinimalRpc' %}
+{% set MODULE_NAME = PKG_NAME.replace('-', '_') %}
+
 {% if GIT_DESCRIBE_NUMBER > '0' %}
 {% set GIT_VERSION = GIT_DESCRIBE_TAG[1:] + '.post' + GIT_DESCRIBE_NUMBER %}
 {% else %}
@@ -9,22 +13,66 @@
 source:
   git_url: ../
 
+#: .. versionadded:: 0.7
+build:
+  script:
+    # Generate Arduino `library.properties` file
+    - python -m paver generate_arduino_library_properties
+    # Generate Arduino code
+    - python -m paver generate_all_code
+    # Copy Arduino library to Conda include directory
+    - python -c
+        "import os.path; import os; import shutil;
+        lib_src_dir = os.path.join(os.environ['SRC_DIR'], 'lib',
+                                   '{{ LIB_NAME }}');
+        install_dir = os.path.join(os.environ['PREFIX'],
+                                   'Library',  # [win]
+                                   'include', 'Arduino', '{{ LIB_NAME }}');
+        shutil.copytree(lib_src_dir, install_dir);
+        "
+    # Generate `setup.py` from `pavement.py` definition.
+    - python -m paver generate_setup
+    # Install source directory as Python package.
+    - python -B setup.py install --single-version-externally-managed --record record.txt
+
 package:
-  name: teensy-minimal-rpc
+  name: {{ PKG_NAME }}
   version: {{ GIT_VERSION }}
 
 requirements:
   build:
     - base-node-rpc >=0.20.0
+    #: .. versionadded:: 0.7
+    - conda-helpers
     - future
     - paver
     - pip
-    - python 2.7*
+    #: .. versionchanged:: 0.7
+    - python {{ python }}
+    #: .. versionadded:: 0.7
+    - six
 
   run:
     - base-node-rpc >=0.20.0
-    - python 2.7*
+    #: .. versionadded:: 0.7
+    - conda-helpers
+    #: .. versionchanged:: 0.7
+    - python {{ python }}
+    #: .. versionadded:: 0.7
+    - six
+
+test:
+  imports:
+    - teensy_minimal_rpc.ADC
+    - teensy_minimal_rpc.DMA
+    - teensy_minimal_rpc.PIT
+    - teensy_minimal_rpc.SIM
+    - teensy_minimal_rpc.adc_sampler
+    - teensy_minimal_rpc.config
+    - teensy_minimal_rpc.node
+    - teensy_minimal_rpc.proxy
+    - teensy_minimal_rpc.state
 
 about:
-  home: https://github.com/wheeler-microfluidics/teensy-minimal-rpc
+  home: https://github.com/sci-bots/{{ PKG_NAME }}
   license: MIT

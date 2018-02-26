@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import nose.tools as nt
 import teensy_minimal_rpc as tr
 

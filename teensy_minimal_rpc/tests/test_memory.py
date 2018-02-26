@@ -1,6 +1,8 @@
+from __future__ import absolute_import
 import nose.tools as nt
 import numpy as np
 import teensy_minimal_rpc as tr
+from six.moves import range
 
 
 def setup_func():
@@ -54,7 +56,7 @@ def check_mem_copy(N):
     data_addr = proxy.mem_alloc(2 * N)
     try:
         data = np.arange(N, dtype='uint16').view('uint8')
-        for i in xrange(0, int(np.ceil(2 * N / float(CHUNK_SIZE)))):
+        for i in range(0, int(np.ceil(2 * N / float(CHUNK_SIZE)))):
             start_i = CHUNK_SIZE * i
             end_i = min(2 * N, CHUNK_SIZE * (i + 1))
             proxy.mem_cpy_host_to_device(data_addr + (CHUNK_SIZE * i),
@@ -110,7 +112,7 @@ def test_echo_array():
     Test sending an array of unsigned 32-bit integers to device and back again.
     '''
     yield check_echo_array, np.arange(100, dtype='uint32')
-    yield check_echo_array, range(100)
+    yield check_echo_array, list(range(100))
 
 
 def check_echo_array(array):

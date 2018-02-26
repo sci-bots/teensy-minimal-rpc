@@ -1,6 +1,8 @@
+from __future__ import absolute_import
 from nose.tools import with_setup
 import numpy as np
 import teensy_minimal_rpc as tr
+from six.moves import range
 
 
 def setup_func():
@@ -42,7 +44,7 @@ def check_rms(N, auto_mean):
     try:
         proxy.mem_fill_uint16(data_addr, 0, N)
 
-        for i in xrange(0, int(np.ceil(2 * N / float(CHUNK_SIZE)))):
+        for i in range(0, int(np.ceil(2 * N / float(CHUNK_SIZE)))):
             proxy.mem_cpy_host_to_device(data_addr + (CHUNK_SIZE * i),
                                          np.arange(CHUNK_SIZE * i / 2,
                                                    min(CHUNK_SIZE * (i + 1) /
