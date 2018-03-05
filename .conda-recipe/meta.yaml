@@ -15,6 +15,8 @@ source:
 
 #: .. versionadded:: 0.7
 build:
+  #: .. versionadded:: 0.8
+  noarch: python
   script:
     # Generate Arduino `library.properties` file
     - python -m paver generate_arduino_library_properties
@@ -22,12 +24,10 @@ build:
     - python -m paver generate_all_code
     # Copy Arduino library to Conda include directory
     - python -c
-        "import os.path; import os; import shutil;
+        "import os.path; import os; import shutil; import platformio_helpers as pioh;
         lib_src_dir = os.path.join(os.environ['SRC_DIR'], 'lib',
                                    '{{ LIB_NAME }}');
-        install_dir = os.path.join(os.environ['PREFIX'],
-                                   'Library',  # [win]
-                                   'include', 'Arduino', '{{ LIB_NAME }}');
+        install_dir = pioh.conda_arduino_include_path().joinpath('{{ LIB_NAME }}');
         shutil.copytree(lib_src_dir, install_dir);
         "
     # Generate `setup.py` from `pavement.py` definition.
@@ -52,26 +52,39 @@ requirements:
     #: .. versionadded:: 0.7
     - six
 
-  run:
-    - base-node-rpc >=0.20.0
-    #: .. versionadded:: 0.7
-    - conda-helpers
-    #: .. versionchanged:: 0.7
-    - python {{ python }}
-    #: .. versionadded:: 0.7
-    - six
-
-test:
-  imports:
-    - teensy_minimal_rpc.ADC
-    - teensy_minimal_rpc.DMA
-    - teensy_minimal_rpc.PIT
-    - teensy_minimal_rpc.SIM
-    - teensy_minimal_rpc.adc_sampler
-    - teensy_minimal_rpc.config
-    - teensy_minimal_rpc.node
-    - teensy_minimal_rpc.proxy
-    - teensy_minimal_rpc.state
+# .. versionadded:: 0.8
+#     Split into `noarch` C++ header package and platform-specific Python
+#     package.
+outputs:
+  - name: {{ PKG_NAME }}-dev
+    noarch: generic
+    files:
+      - share
+  - name: {{ PKG_NAME }}
+    noarch: python
+    files:
+      - Lib/site-packages/{{ MODULE_NAME }}
+    requirements:
+      run:
+        - {{ pin_subpackage(PKG_NAME + '-dev', max_pin='x.x') }}
+        - base-node-rpc >=0.20.0
+        #: .. versionadded:: 0.7
+        - conda-helpers
+        #: .. versionchanged:: 0.7
+        - python {{ python }}
+        #: .. versionadded:: 0.7
+        - six
+    test:
+      imports:
+        - teensy_minimal_rpc.ADC
+        - teensy_minimal_rpc.DMA
+        - teensy_minimal_rpc.PIT
+        - teensy_minimal_rpc.SIM
+        - teensy_minimal_rpc.adc_sampler
+        - teensy_minimal_rpc.config
+        - teensy_minimal_rpc.node
+        - teensy_minimal_rpc.proxy
+        - teensy_minimal_rpc.state
 
 about:
   home: https://github.com/sci-bots/{{ PKG_NAME }}
