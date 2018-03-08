@@ -41,9 +41,9 @@ package:
 
 requirements:
   build:
-    - base-node-rpc >=0.20.0
+    - base-node-rpc >=0.46
     #: .. versionadded:: 0.7
-    - conda-helpers
+    - conda-helpers >=0.14
     - future
     - paver
     - pip
@@ -67,9 +67,9 @@ outputs:
     requirements:
       run:
         - {{ pin_subpackage(PKG_NAME + '-dev', max_pin='x.x') }}
-        - base-node-rpc >=0.20.0
+        - base-node-rpc >=0.46
         #: .. versionadded:: 0.7
-        - conda-helpers
+        - conda-helpers >=0.14
         #: .. versionchanged:: 0.7
         - python {{ python }}
         #: .. versionadded:: 0.7
