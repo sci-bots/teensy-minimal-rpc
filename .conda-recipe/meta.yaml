@@ -48,7 +48,6 @@ requirements:
     - future
     - paver
     - pip
-    #: .. versionchanged:: 0.7
     - python
     #: .. versionadded:: 0.7
     - six
@@ -72,8 +71,7 @@ outputs:
         - base-node-rpc >=0.46.1
         #: .. versionadded:: 0.7
         - conda-helpers >=0.14
-        #: .. versionchanged:: 0.7
-        - python {{ python }}
+        - python
         #: .. versionadded:: 0.7
         - six
     test:
