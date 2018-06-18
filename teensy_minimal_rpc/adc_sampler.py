@@ -2,7 +2,8 @@
 from __future__ import division
 from __future__ import absolute_import
 import datetime as dt
-import types
+import io
+import pkgutil
 import weakref
 
 from six.moves import range
@@ -12,7 +13,6 @@ import arduino_helpers.hardware.teensy.dma as dma
 import arduino_helpers.hardware.teensy.pdb as pdb
 import numpy as np
 import pandas as pd
-import path_helpers as ph
 import six
 import teensy_minimal_rpc.DMA as DMA
 import teensy_minimal_rpc.SIM as SIM
@@ -35,13 +35,19 @@ def get_adc_configs(F_BUS=48e6, ADC_CLK=22e6):
     now, we assume that they are close enough for practical use, but there
     might be some edge cases where inappropriate ADC settings may be chosen as
     a result.
-    '''
-    package_path = ph.path(__file__).realpath().parent
 
+
+    .. versionchanged:: X.X.X
+        Load table of ADC configurations using ``pkgutil`` to support reading
+        from ``.zip`` files, e.g., Py2Exe ``library.zip`` packaged modules.
+    '''
     # Read serialized (CSV) table of all possible ADC configurations (not all
     # valid).
-    df_adc_configs = pd.read_csv(package_path.joinpath('static', 'data',
-                                                       'adc_configs.csv'))
+    #
+    # XXX Load using `pkgutil` to support reading from `.zip` files, e.g.,
+    # Py2Exe `library.zip` packaged modules.
+    csv_data = pkgutil.get_data(__name__, 'static/data/adc_configs.csv')
+    df_adc_configs = pd.read_csv(io.BytesIO(csv_data))
 
     df_adc_configs = (df_adc_configs
                       .loc[(df_adc_configs['CFG2[ADACKEN]'] == 0) &
